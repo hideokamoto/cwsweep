@@ -87,7 +87,7 @@ components:
     entities:
       - name: AccountCredentials
         identifier: account_id
-        attributes: [account_id, access_key_id, secret_access_key, session_token, expiration]
+        attributes: [account_id, access_key_id, secret_access_key (secrecy::Secretでラップし非ログ出力を保証), session_token (secrecy::Secretでラップ), expiration]
 
   - name: IdentityVerifier
     summary: API呼び出し直前にsts:get-caller-identityで実アカウントIDを検証する

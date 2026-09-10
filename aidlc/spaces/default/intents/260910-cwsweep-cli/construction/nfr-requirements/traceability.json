@@ -1,0 +1,20 @@
+{
+  "stage": "nfr-requirements",
+  "note": "Inception に独立したNFRカタログ・requirements-analysisは存在しない（スコープ上SKIP）。upstream_ids はPRDの『非機能要件（構造的要件）』6項目を代替として用いる。",
+  "upstream_ids": [
+    "prd-nfr#1",
+    "prd-nfr#2",
+    "prd-nfr#3",
+    "prd-nfr#4",
+    "prd-nfr#5",
+    "prd-nfr#6"
+  ],
+  "coverage": [
+    { "id": "prd-nfr#1", "status": "OK", "target": "NFR2.1, NFR2.2, NFR2.3" },
+    { "id": "prd-nfr#2", "status": "OK", "target": "NFR1.2, NFR3.4" },
+    { "id": "prd-nfr#3", "status": "OK", "target": "NFR2.4" },
+    { "id": "prd-nfr#4", "status": "OK", "target": "NFR2.5" },
+    { "id": "prd-nfr#5", "status": "OK", "target": "NFR5.1, NFR4.3" },
+    { "id": "prd-nfr#6", "status": "OK", "target": "NFR2.9" }
+  ]
+}
