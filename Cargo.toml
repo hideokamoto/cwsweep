@@ -1,0 +1,39 @@
+[package]
+name = "cwsweep"
+version = "0.1.0"
+edition = "2021"
+description = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI"
+license = "MIT"
+
+[[bin]]
+name = "cwsweep"
+path = "src/main.rs"
+
+[lib]
+name = "cwsweep"
+path = "src/lib.rs"
+
+[dependencies]
+aws-config = "1"
+aws-sdk-organizations = "1"
+aws-sdk-sts = "1"
+aws-sdk-cloudwatchlogs = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+clap = { version = "4", features = ["derive"] }
+inquire = "0.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+comfy-table = "7"
+thiserror = "1"
+secrecy = { version = "0.8", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3

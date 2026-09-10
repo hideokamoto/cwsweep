@@ -1,0 +1,28 @@
+{
+  "stage": "code-generation",
+  "unit": null,
+  "version": 1,
+  "writes": [
+    { "path": "Cargo.toml" },
+    { "path": "Cargo.lock" },
+    { "path": "src/main.rs" },
+    { "path": "src/lib.rs" },
+    { "path": "src/error.rs" },
+    { "path": "src/cli.rs" },
+    { "path": "src/org_discovery.rs" },
+    { "path": "src/credentials.rs" },
+    { "path": "src/identity.rs" },
+    { "path": "src/scanner.rs" },
+    { "path": "src/aggregator.rs" },
+    { "path": "src/output.rs" },
+    { "path": "src/selector.rs" },
+    { "path": "src/planner.rs" },
+    { "path": "src/confirmation.rs" },
+    { "path": "src/execution.rs" },
+    { "path": "src/audit.rs" },
+    { "path": "tests/scan_select_execute.rs" },
+    { "path": "tests/audit_log_format.rs" },
+    { "path": "README.md" },
+    { "path": ".gitignore" }
+  ]
+}

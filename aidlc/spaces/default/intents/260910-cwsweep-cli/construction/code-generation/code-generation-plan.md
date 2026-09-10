@@ -86,17 +86,17 @@
 
 ### Step 1: プロジェクト構造・本番設定スケルトン
 
-- [ ] `Cargo.toml` を新規作成する。依存: `aws-config`, `aws-sdk-organizations`, `aws-sdk-sts`, `aws-sdk-cloudwatchlogs`, `tokio`（`rt-multi-thread`, `macros`）, `clap`（`derive`）, `inquire`, `serde`, `serde_json`, `comfy-table`, `thiserror`, `secrecy`, `tracing`, `tracing-subscriber`, `uuid`（v4）。開発依存: `cargo-llvm-cov`（CIで利用、Cargo.tomlには不要）, テスト用モッククレート（`aws-smithy-mocks-experimental` または手書きトレイト差し替え）。
-- [ ] クレートルート `src/main.rs` に `#![forbid(unsafe_code)]` を宣言する。
-- [ ] 本番コードパスに `#[deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` を適用する（テストモジュールは対象外）。
-- [ ] `src/lib.rs` を作成し、下記モジュール構成の空スケルトンを用意する: `cli`, `org_discovery`, `credentials`, `identity`, `scanner`, `aggregator`, `output`, `selector`, `planner`, `confirmation`, `execution`, `audit`, `error`。
-- [ ] Domain Designの12コンポーネントを1モジュール1コンポーネントとして対応させる（`CliApp`→`cli`, `OrgDiscovery`→`org_discovery`, `CredentialProvider`→`credentials`, `IdentityVerifier`→`identity`, `LogGroupScanner`→`scanner`, `ScanAggregator`→`aggregator`, `OutputFormatter`→`output`, `InteractiveSelector`→`selector`, `ActionPlanner`→`planner`, `ConfirmationPresenter`→`confirmation`, `ExecutionEngine`→`execution`, `AuditLogger`→`audit`）。
+- [x] `Cargo.toml` を新規作成する。依存: `aws-config`, `aws-sdk-organizations`, `aws-sdk-sts`, `aws-sdk-cloudwatchlogs`, `tokio`（`rt-multi-thread`, `macros`）, `clap`（`derive`）, `inquire`, `serde`, `serde_json`, `comfy-table`, `thiserror`, `secrecy`, `tracing`, `tracing-subscriber`, `uuid`（v4）。開発依存: `cargo-llvm-cov`（CIで利用、Cargo.tomlには不要）, テスト用モッククレート（`aws-smithy-mocks-experimental` または手書きトレイト差し替え）。
+- [x] クレートルート `src/main.rs` に `#![forbid(unsafe_code)]` を宣言する。
+- [x] 本番コードパスに `#[deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]` を適用する（テストモジュールは対象外）。
+- [x] `src/lib.rs` を作成し、下記モジュール構成の空スケルトンを用意する: `cli`, `org_discovery`, `credentials`, `identity`, `scanner`, `aggregator`, `output`, `selector`, `planner`, `confirmation`, `execution`, `audit`, `error`。
+- [x] Domain Designの12コンポーネントを1モジュール1コンポーネントとして対応させる（`CliApp`→`cli`, `OrgDiscovery`→`org_discovery`, `CredentialProvider`→`credentials`, `IdentityVerifier`→`identity`, `LogGroupScanner`→`scanner`, `ScanAggregator`→`aggregator`, `OutputFormatter`→`output`, `InteractiveSelector`→`selector`, `ActionPlanner`→`planner`, `ConfirmationPresenter`→`confirmation`, `ExecutionEngine`→`execution`, `AuditLogger`→`audit`）。
 
 ### Step 2: テストランナー/設定のブートストラップ（最初のテストの前に完了させる）
 
-- [ ] `cargo test` がユニットテストの既定ランナーであることを確認し、`tests/`（統合テスト）ディレクトリを作成する。
-- [ ] `cargo llvm-cov` のローカル実行手順を `unit-test-instructions.md` に記録する。
-- [ ] スコープ内テストを実行できる最小コマンド（例: `cargo test --lib`）が通ることを確認してから最初のRed/Green/テストファーストステップへ進む。
+- [x] `cargo test` がユニットテストの既定ランナーであることを確認し、`tests/`（統合テスト）ディレクトリを作成する。
+- [x] `cargo llvm-cov` のローカル実行手順を `unit-test-instructions.md` に記録する。
+- [x] スコープ内テストを実行できる最小コマンド（例: `cargo test --lib`）が通ることを確認してから最初のRed/Green/テストファーストステップへ進む。
 
 ### Step 3〜16: Custom ordering（各層をtest-afterで実装するが、安全パスはTDD）
 
@@ -104,42 +104,42 @@
 
 #### Identity検証層
 
-- [ ] Step 3: `error` モジュールに `thiserror` ベースのエラー型（`IdentityMismatchError`, `AssumeRoleError`, `AuditWriteError`, `PaginationError` 等）を定義する。
-- [ ] Step 4: `credentials` モジュールに `AccountCredentials`（`secret_access_key`/`session_token`を`secrecy::SecretString`でラップし、`Debug`を手動実装して`[REDACTED]`マスク）と、管理アカウントは現在の認証情報をそのまま使用しメンバーアカウントのみ`AssumeRole`（既定ロール名`OrganizationAccountAccessRole`、引数で上書き可）する `CredentialProvider` を実装する。
-- [ ] Step 5（テスト先行・TDD）: `identity` モジュールの `IdentityVerifier::verify_identity` について、まず「アカウントID不一致時に即座に`IdentityMismatchError`を返し処理を継続しない」「削除直前の二重目の検証が独立して呼び出される」の期待仕様をテストとして書き（Red）、最小実装でGreenにする。境界値: 不一致ID、リージョン跨ぎでの検証、`sts:get-caller-identity`呼び出し失敗時の伝播を含める。
-- [ ] Step 6: `credentials`/`identity`モジュールの通常系（正常な認証情報解決、AssumeRoleの成功パス）を実装後にユニットテストを作成・実行する（test-after）。
+- [x] Step 3: `error` モジュールに `thiserror` ベースのエラー型（`IdentityMismatchError`, `AssumeRoleError`, `AuditWriteError`, `PaginationError` 等）を定義する。
+- [x] Step 4: `credentials` モジュールに `AccountCredentials`（`secret_access_key`/`session_token`を`secrecy::SecretString`でラップし、`Debug`を手動実装して`[REDACTED]`マスク）と、管理アカウントは現在の認証情報をそのまま使用しメンバーアカウントのみ`AssumeRole`（既定ロール名`OrganizationAccountAccessRole`、引数で上書き可）する `CredentialProvider` を実装する。
+- [x] Step 5（テスト先行・TDD）: `identity` モジュールの `IdentityVerifier::verify_identity` について、まず「アカウントID不一致時に即座に`IdentityMismatchError`を返し処理を継続しない」「削除直前の二重目の検証が独立して呼び出される」の期待仕様をテストとして書き（Red）、最小実装でGreenにする。境界値: 不一致ID、リージョン跨ぎでの検証、`sts:get-caller-identity`呼び出し失敗時の伝播を含める。
+- [x] Step 6: `credentials`/`identity`モジュールの通常系（正常な認証情報解決、AssumeRoleの成功パス）を実装後にユニットテストを作成・実行する（test-after）。
 
 #### ページネーション集計層
 
-- [ ] Step 7: `scanner` モジュールに `LogGroupScanner` を実装し、`describe-log-groups`のページネーションを最後まで辿ってから集計に渡す（1ページのみでの確定を許容しない）。リージョンは`CliApp`の引数解析結果（`--regions`必須、自動列挙フォールバックなし）を受け取る。
-- [ ] Step 8: `aggregator` モジュールに `ScanAggregator`（`LogGroupRecord`エンティティ、`Vec<LogGroupRecord>`保持、複数アカウント×リージョンの集計）を実装する。両モジュールの実装後にその層のユニットテストを作成・実行する（test-after）。境界値としてページネーション途中エラーのケースを含める。
+- [x] Step 7: `scanner` モジュールに `LogGroupScanner` を実装し、`describe-log-groups`のページネーションを最後まで辿ってから集計に渡す（1ページのみでの確定を許容しない）。リージョンは`CliApp`の引数解析結果（`--regions`必須、自動列挙フォールバックなし）を受け取る。
+- [x] Step 8: `aggregator` モジュールに `ScanAggregator`（`LogGroupRecord`エンティティ、`Vec<LogGroupRecord>`保持、複数アカウント×リージョンの集計）を実装する。両モジュールの実装後にその層のユニットテストを作成・実行する（test-after）。境界値としてページネーション途中エラーのケースを含める。
 
 #### 対話式UI層
 
-- [ ] Step 9: `output` モジュールに `OutputFormatter`（`comfy-table`によるテーブル表示、合計バイト数集計）を実装する。
-- [ ] Step 10（テスト先行・TDD、初期状態の抑止仕様のみ）: `selector` モジュールの `InteractiveSelector`（`inquire`のマルチセレクト）について、まず「初期状態は常に全チェックOFF（all-selectedにしない）」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。それ以外の選択操作ロジックは実装後にtest-afterでテストする。
+- [x] Step 9: `output` モジュールに `OutputFormatter`（`comfy-table`によるテーブル表示、合計バイト数集計）を実装する。
+- [x] Step 10（テスト先行・TDD、初期状態の抑止仕様のみ）: `selector` モジュールの `InteractiveSelector`（`inquire`のマルチセレクト）について、まず「初期状態は常に全チェックOFF（all-selectedにしない）」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。それ以外の選択操作ロジックは実装後にtest-afterでテストする。
 
 #### アクション実行層
 
-- [ ] Step 11: `planner` モジュールに `ActionPlanner`（`PlannedAction`エンティティ、選択結果からの計画生成）を実装する。
-- [ ] Step 12: `confirmation` モジュールに `ConfirmationPresenter`（対象アカウントID・リージョン・ログループ名一覧・合計バイト数を再掲する確認画面。`PlannedAction`を直接ミューテートしない）を実装する。
-- [ ] Step 13: Planner/Confirmationの実装後にユニットテストを作成・実行する（test-after）。
-- [ ] Step 14（テスト先行・TDD）: `execution` モジュールの `ExecutionEngine` について、まず「`--execute`フラグが明示的に渡されていない限り`delete-log-group`/`put-retention-policy`のAPI呼び出しコード自体を通過しない」という dry-run 既定の期待仕様と、「削除・retention変更の直前に独立した二重目のIdentity検証を再実行する」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。フラグ未指定の固定テストケースを含め、将来のデフォルト値反転を検出できるようにする。
-- [ ] Step 15（テスト先行・TDD）: `audit` モジュールの `AuditLogger::append`（JSON Linesを1エントリずつ`fsync`付きで追記、対象アカウントID・リージョン・ログループ名・実行時刻・成功/失敗・`run_id`相関を含む）について、まず「書き込み失敗（`std::io::Error`）時に`ExecutionEngine`へ`Result`で伝播し当該操作を中断する」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。無効化オプションを設けないことも固定テストケース化する。
-- [ ] Step 16: `ExecutionEngine`/`AuditLogger`の通常系（成功パスでの実行・監査ログ出力）を実装後にユニットテストを作成・実行する（test-after）。100%パスカバレッジ＋境界値テスト（不一致ID、リージョン跨ぎ、ページネーション途中エラー等）は破壊的操作パスと安全パス全体に適用する。
+- [x] Step 11: `planner` モジュールに `ActionPlanner`（`PlannedAction`エンティティ、選択結果からの計画生成）を実装する。
+- [x] Step 12: `confirmation` モジュールに `ConfirmationPresenter`（対象アカウントID・リージョン・ログループ名一覧・合計バイト数を再掲する確認画面。`PlannedAction`を直接ミューテートしない）を実装する。
+- [x] Step 13: Planner/Confirmationの実装後にユニットテストを作成・実行する（test-after）。
+- [x] Step 14（テスト先行・TDD）: `execution` モジュールの `ExecutionEngine` について、まず「`--execute`フラグが明示的に渡されていない限り`delete-log-group`/`put-retention-policy`のAPI呼び出しコード自体を通過しない」という dry-run 既定の期待仕様と、「削除・retention変更の直前に独立した二重目のIdentity検証を再実行する」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。フラグ未指定の固定テストケースを含め、将来のデフォルト値反転を検出できるようにする。
+- [x] Step 15（テスト先行・TDD）: `audit` モジュールの `AuditLogger::append`（JSON Linesを1エントリずつ`fsync`付きで追記、対象アカウントID・リージョン・ログループ名・実行時刻・成功/失敗・`run_id`相関を含む）について、まず「書き込み失敗（`std::io::Error`）時に`ExecutionEngine`へ`Result`で伝播し当該操作を中断する」という期待仕様をテストとして書き（Red）、最小実装でGreenにする。無効化オプションを設けないことも固定テストケース化する。
+- [x] Step 16: `ExecutionEngine`/`AuditLogger`の通常系（成功パスでの実行・監査ログ出力）を実装後にユニットテストを作成・実行する（test-after）。100%パスカバレッジ＋境界値テスト（不一致ID、リージョン跨ぎ、ページネーション途中エラー等）は破壊的操作パスと安全パス全体に適用する。
 
 ### Step 17: 統合シナリオテスト
 
-- [ ] `tests/scan_select_execute.rs` に、モックAWS境界を用いた「スキャン → 選択 → 削除（dry-run）」の一連の流れを複数モジュールを通して検証する統合テストを作成する。
-- [ ] `tests/audit_log_format.rs` に監査ログの出力内容（フォーマット・必須フィールド）を検証する専用テストを作成する。
-- [ ] 実AWSアカウントに接触するテスト（存在する場合）は`#[ignore]`でCIの通常実行から分離する。
+- [x] `tests/scan_select_execute.rs` に、モックAWS境界を用いた「スキャン → 選択 → 削除（dry-run）」の一連の流れを複数モジュールを通して検証する統合テストを作成する。
+- [x] `tests/audit_log_format.rs` に監査ログの出力内容（フォーマット・必須フィールド）を検証する専用テストを作成する。
+- [x] 実AWSアカウントに接触するテスト（存在する場合）は`#[ignore]`でCIの通常実行から分離する。
 
 ### Step 18: 環境/ビルド設定・ドキュメント・トレーサビリティ
 
-- [ ] `.cargo/config.toml`（必要な場合）とワークスペース設定を整える。
-- [ ] `rustfmt.toml`（既定設定）、`clippy`実行手順、`cargo audit`/`cargo deny`の実行手順を`README.md`（または`docs/`）に記載する。
-- [ ] `README.md`にCLI使用方法（`--regions`必須、`--execute`既定OFF等）を記載する。
-- [ ] `code-summary.md`, `source-manifest.json`, `traceability.json`を作成する（Step 5, 6の成果物）。
+- [x] `.cargo/config.toml`（必要な場合）とワークスペース設定を整える。
+- [x] `rustfmt.toml`（既定設定）、`clippy`実行手順、`cargo audit`/`cargo deny`の実行手順を`README.md`（または`docs/`）に記載する。
+- [x] `README.md`にCLI使用方法（`--regions`必須、`--execute`既定OFF等）を記載する。
+- [x] `code-summary.md`, `source-manifest.json`, `traceability.json`を作成する（Step 5, 6の成果物）。
 
 ## Assumptions & Open Questions
 
