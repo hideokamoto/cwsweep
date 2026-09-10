@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to settings.local.json (gitignored) for personal overrides. These take precedence over settings.json.",
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85",
+    "_comment_BEDROCK_OPT_IN": "This install ships WITHOUT Bedrock forcing (see THIRD_PARTY_NOTICES.md § Deviation from upstream) so it runs unmodified on Claude Code on the web and other non-AWS-credentialed runners. To opt back into Bedrock on your own machine, set CLAUDE_CODE_USE_BEDROCK=1, AWS_REGION, and the ANTHROPIC_DEFAULT_*_MODEL Bedrock IDs here — never in the shared settings.json. Claude Code does not read AWS_REGION from ~/.aws. See docs/guide/01-getting-started.md § AWS Bedrock Setup in the upstream awslabs/aidlc-workflows repository.",
+    "_comment_AWS_PROFILE": "Set your AWS SSO/credential profile here (kept out of shared settings.json so it doesn't leak). Uncomment and set if you authenticate via a named profile.",
+    "_comment_AWS_AIDLC_DEFAULT_SCOPE": "Pre-set default scope for /aidlc workflows. Valid: enterprise, feature, mvp, poc, bugfix, refactor, infra, security-patch, classic, workshop, express. Applies at workflow init only. See docs/guide/13-customization.md § Per-Project Default Scope.",
+    "AWS_AIDLC_DEFAULT_SCOPE": "classic"
+  },
+  "model": "opus[1m]",
+  "effortLevel": "xhigh"
+}
