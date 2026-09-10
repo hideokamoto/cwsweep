@@ -1,0 +1,27 @@
+{
+  "stage": "domain-design",
+  "note": "requirements-analysis と user-stories はスコープ上SKIP。upstream_ids は代わりに ideation/scope-definition/intent-backlog.md の Must-have Proto-Unit（#1-#7）を用いる。Won't（#8-#11, Out of Scope）は対象外のため列挙しない。",
+  "upstream_ids": [
+    "backlog#1",
+    "backlog#2",
+    "backlog#3",
+    "backlog#4",
+    "backlog#5",
+    "backlog#6",
+    "backlog#7"
+  ],
+  "coverage": [
+    { "id": "backlog#1", "status": "OK", "target": "OrgDiscovery" },
+    { "id": "backlog#1", "status": "OK", "target": "CredentialProvider" },
+    { "id": "backlog#1", "status": "OK", "target": "IdentityVerifier" },
+    { "id": "backlog#2", "status": "OK", "target": "LogGroupScanner" },
+    { "id": "backlog#2", "status": "OK", "target": "ScanAggregator" },
+    { "id": "backlog#3", "status": "OK", "target": "OutputFormatter" },
+    { "id": "backlog#4", "status": "OK", "target": "InteractiveSelector" },
+    { "id": "backlog#5", "status": "OK", "target": "ExecutionEngine" },
+    { "id": "backlog#6", "status": "OK", "target": "ExecutionEngine" },
+    { "id": "backlog#6", "status": "OK", "target": "ActionPlanner" },
+    { "id": "backlog#6", "status": "OK", "target": "ConfirmationPresenter" },
+    { "id": "backlog#7", "status": "OK", "target": "AuditLogger" }
+  ]
+}
