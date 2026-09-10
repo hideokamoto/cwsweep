@@ -1,0 +1,38 @@
+{
+  "stage": "nfr-design",
+  "unit": null,
+  "upstream_ids": [
+    "NFR1.1", "NFR1.2", "NFR1.3", "NFR1.4",
+    "NFR2.1", "NFR2.2", "NFR2.3", "NFR2.4", "NFR2.5", "NFR2.6", "NFR2.7", "NFR2.8", "NFR2.9",
+    "NFR3.1", "NFR3.2", "NFR3.3", "NFR3.4",
+    "NFR4.1", "NFR4.2", "NFR4.3", "NFR4.4",
+    "NFR5.1", "NFR5.2", "NFR5.3", "NFR5.4"
+  ],
+  "coverage": [
+    { "id": "NFR1.1", "status": "OK", "target": "performance-design.md: 逐次await + 単一HTTPクライアント初期化" },
+    { "id": "NFR1.2", "status": "OK", "target": "performance-design.md: ページネーターによる逐次呼び出し" },
+    { "id": "NFR1.3", "status": "OK", "target": "scalability-design.md: ScanAggregatorのVec保持" },
+    { "id": "NFR1.4", "status": "OK", "target": "reliability-design.md: aws-config標準リトライ(最大3回)" },
+    { "id": "NFR2.1", "status": "OK", "target": "security-design.md: secrecy::SecretStringラップ + Debugマスク" },
+    { "id": "NFR2.2", "status": "N/A", "target": "AWS IAM委譲は設計不要（実装方針のみ）" },
+    { "id": "NFR2.3", "status": "OK", "target": "security-design.md: IdentityVerifierのResult伝播" },
+    { "id": "NFR2.4", "status": "OK", "target": "security-design.md: dry-run既定セクション（execute:boolによる分岐をAPI呼び出しの外側に配置）" },
+    { "id": "NFR2.5", "status": "OK", "target": "security-design.md: 削除直前の二重検証呼び出し" },
+    { "id": "NFR2.6", "status": "N/A", "target": "CI設定はci-pipelineステージで扱う" },
+    { "id": "NFR2.7", "status": "N/A", "target": "CI設定はci-pipelineステージで扱う" },
+    { "id": "NFR2.8", "status": "N/A", "target": "コード全体方針であり個別設計対象なし" },
+    { "id": "NFR2.9", "status": "OK", "target": "logical-components.md: Blast Radiusセクション（初期全選択OFFによるBlast Radius抑制）" },
+    { "id": "NFR3.1", "status": "N/A", "target": "アカウント数上限はスキャンロジックの自然な帰結であり個別設計不要" },
+    { "id": "NFR3.2", "status": "OK", "target": "security-design.md: 入力値検証・リージョン明示指定セクション（--regions必須化、自動列挙フォールバックなし）" },
+    { "id": "NFR3.3", "status": "OK", "target": "scalability-design.md: Vec<LogGroupRecord>保持" },
+    { "id": "NFR3.4", "status": "OK", "target": "scalability-design.md: 横スケール非適用の判断" },
+    { "id": "NFR4.1", "status": "N/A", "target": "SLA/SLO非設定は設計不要" },
+    { "id": "NFR4.2", "status": "OK", "target": "reliability-design.md: バルクヘッド分離" },
+    { "id": "NFR4.3", "status": "OK", "target": "security-design.md: AuditLoggerのfsync + Result伝播" },
+    { "id": "NFR4.4", "status": "OK", "target": "reliability-design.md: バックアップ戦略セクション（対象外とする設計判断を明記）" },
+    { "id": "NFR5.1", "status": "OK", "target": "observability-design.md: JSON Lines + run_id相関" },
+    { "id": "NFR5.2", "status": "OK", "target": "observability-design.md: tracingによる構造化ログ" },
+    { "id": "NFR5.3", "status": "OK", "target": "observability-design.md: アラート・ダッシュボードセクション（対象外とする設計判断を明記）" },
+    { "id": "NFR5.4", "status": "OK", "target": "observability-design.md: アラート・ダッシュボードセクション（対象外とする設計判断を明記）" }
+  ]
+}
