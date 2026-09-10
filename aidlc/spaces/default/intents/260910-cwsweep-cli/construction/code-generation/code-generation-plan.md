@@ -141,6 +141,12 @@
 - [x] `README.md`にCLI使用方法（`--regions`必須、`--execute`既定OFF等）を記載する。
 - [x] `code-summary.md`, `source-manifest.json`, `traceability.json`を作成する（Step 5, 6の成果物）。
 
+### Step 19: Build-and-Test loop-back — 破壊的操作パス100%カバレッジの追加テスト（R-01対応）
+
+- [ ] Build and Testステージで検出されたNot Met項目（R-01: `execution.rs`/`audit.rs`/`identity.rs`の破壊的操作・安全パス100%パスカバレッジ未達成）に対し、到達困難な分岐（`async_trait`マクロ展開由来の境界コード、`serde_json::to_string`失敗分岐、未使用テストアーム等）を狙った追加ユニットテストを作成する。
+- [ ] 追加テスト後、`cargo llvm-cov --lib --summary-only`で該当3モジュールが100%（または到達不能であることが構造的に説明できる場合はその理由をコード内コメントで明記）に近づいたことを確認する。
+- [ ] 既存の97件のユニットテスト+4件の統合テストを壊さないこと。
+
 ## Assumptions & Open Questions
 
 None.
