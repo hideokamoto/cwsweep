@@ -50,6 +50,17 @@
 1. **`cargo audit` / `cargo deny check` は本ステージでは未実行。** ツールがこのセッションにインストールされておらず、CIゲートとしての実行手順のみ`README.md`に記載した。CI Pipelineステージで実際の実行・ゲート化を行う必要がある。
 2. **`AuditLogger`の書き込み先抽象化。** 当初設計（`File`直書き）から、書き込み失敗（write失敗・fsync失敗・mutex poison）を決定的にテストするため`SyncWrite`トレイトによる抽象化に変更した。公開APIとfsync付きJSON Linesという設計意図自体は変更していない。
 
+## レビュー指摘への対応（Request Changes → Revision 1）
+
+advisoryアーキテクチャレビュー（Iteration 1, Verdict: READY, Major 1件/Minor 3件）を受け、人間の明示的な選択によりR-02/R-03/R-04を修正した（R-01は今回の対応対象から明示的に除外され、未解決のまま残る）。
+
+- **R-02（STSクライアントのリージョン固定）**: コード変更は行わず、v1はAWS標準パーティション（商用リージョン）のみを対象とする設計判断をREADME.mdと`sts_client_for`のコード内コメントに明記した。
+- **R-03（全滅時の終了コード）**: `CliApp::scan_fully_failed`を追加し、対象1件以上かつ全件失敗の場合のみ非ゼロ終了コードを返すようにした（部分成功時・対象0件時は0終了）。ユニットテスト4件追加。
+- **R-04（監査ログ出力先固定）**: `--audit-log-path`引数を追加（既定値は後方互換の`cwsweep-audit.jsonl`）。無効化オプションは追加していない（project.md Mandated要件を維持）。ユニットテスト2件追加。
+- **R-01（破壊的操作パス100%カバレッジ未達成）**: 人間が明示的に「未解決のまま残す」と選択したため、今回は対応していない。
+
+修正後のテスト結果: `cargo test` 97 unit（既存91+新規6）+ 4 integration すべてpass。`cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`: 合格。
+
 ## 未達成の品質目標（正直な報告）
 
 team.mdが要求する「100%パスカバレッジ」を厳密には満たせていない箇所がある:

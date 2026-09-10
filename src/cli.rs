@@ -45,6 +45,12 @@ pub struct Cli {
     /// 一切呼び出されない（dry-run既定）。
     #[arg(long, default_value_t = false)]
     pub execute: bool,
+
+    /// 監査ログ（JSON Lines）の出力先パス。既定値は後方互換のため現行のカレント
+    /// ディレクトリ直下`cwsweep-audit.jsonl`を維持する。無効化するオプションは
+    /// 存在しない（project.md Mandated: 監査ログ出力に無効化オプションを設けない）。
+    #[arg(long, default_value = "cwsweep-audit.jsonl")]
+    pub audit_log_path: std::path::PathBuf,
 }
 
 impl Cli {
@@ -142,6 +148,24 @@ impl CliApp {
 
     pub fn render_output(aggregator: &ScanAggregator, format: OutputFormat) -> String {
         OutputFormatter::format(aggregator, format)
+    }
+
+    /// R-03: 終了コード判定方針。
+    ///
+    /// 対象となったアカウント×リージョンの組み合わせが1件以上あり、かつ
+    /// そのすべてが失敗した場合にのみ`true`（＝全滅）を返す。1件でも成功が
+    /// あれば`false`（正常終了扱い）。対象自体が0件（accounts/regionsが空）の
+    /// 場合も`false`とする——これはスキャン失敗ではないため。
+    ///
+    /// CI/自動化からの呼び出しで「スキャン全滅」と「本当に削除対象0件」を
+    /// 終了コードで区別できるようにするための判定である。一部成功・一部失敗の
+    /// 場合は0（成功）終了とし、失敗したアカウント/リージョンは`tracing::warn!`
+    /// によるログ出力で個別に把握する。
+    pub fn scan_fully_failed(outcomes: &[AccountRegionOutcome]) -> bool {
+        !outcomes.is_empty()
+            && outcomes
+                .iter()
+                .all(|o| matches!(o, AccountRegionOutcome::Failed { .. }))
     }
 
     pub fn select<P: MultiSelectPrompt>(
@@ -579,5 +603,85 @@ mod tests {
         let cli = Cli::parse_from_args(["cwsweep", "--regions", "us-east-1", "--output", "json"])
             .unwrap();
         assert_eq!(cli.output, OutputFormat::Json);
+    }
+
+    #[test]
+    fn audit_log_path_defaults_to_cwsweep_audit_jsonl_for_backward_compat() {
+        let cli = Cli::parse_from_args(["cwsweep", "--regions", "us-east-1"]).unwrap();
+        assert_eq!(
+            cli.audit_log_path,
+            std::path::PathBuf::from("cwsweep-audit.jsonl")
+        );
+    }
+
+    #[test]
+    fn audit_log_path_can_be_overridden() {
+        let cli = Cli::parse_from_args([
+            "cwsweep",
+            "--regions",
+            "us-east-1",
+            "--audit-log-path",
+            "/var/log/cwsweep/audit.jsonl",
+        ])
+        .unwrap();
+        assert_eq!(
+            cli.audit_log_path,
+            std::path::PathBuf::from("/var/log/cwsweep/audit.jsonl")
+        );
+    }
+
+    // --- R-03: scan_fully_failed（終了コード判定）のテスト ---
+
+    fn failed_outcome(account_id: &str, region: &str) -> AccountRegionOutcome {
+        AccountRegionOutcome::Failed {
+            account_id: account_id.to_string(),
+            region: region.to_string(),
+            error: ScanError::AssumeRole(AssumeRoleError {
+                account_id: account_id.to_string(),
+                role_name: "role".to_string(),
+                message: "boom".to_string(),
+            }),
+        }
+    }
+
+    fn success_outcome(account_id: &str, region: &str) -> AccountRegionOutcome {
+        AccountRegionOutcome::Success {
+            account_id: account_id.to_string(),
+            region: region.to_string(),
+        }
+    }
+
+    #[test]
+    fn scan_fully_failed_is_true_when_every_outcome_failed() {
+        let outcomes = vec![
+            failed_outcome(MANAGEMENT_ACCOUNT_ID, REGION),
+            failed_outcome(MEMBER_ACCOUNT_ID, REGION),
+        ];
+        assert!(CliApp::scan_fully_failed(&outcomes));
+    }
+
+    #[test]
+    fn scan_fully_failed_is_false_when_at_least_one_outcome_succeeded() {
+        let outcomes = vec![
+            failed_outcome(MANAGEMENT_ACCOUNT_ID, REGION),
+            success_outcome(MEMBER_ACCOUNT_ID, REGION),
+        ];
+        assert!(!CliApp::scan_fully_failed(&outcomes));
+    }
+
+    #[test]
+    fn scan_fully_failed_is_false_when_outcomes_are_empty() {
+        // accounts/regionsの組み合わせが0件の場合は「スキャン失敗」ではないため false。
+        let outcomes: Vec<AccountRegionOutcome> = Vec::new();
+        assert!(!CliApp::scan_fully_failed(&outcomes));
+    }
+
+    #[test]
+    fn scan_fully_failed_is_false_when_all_outcomes_succeeded() {
+        let outcomes = vec![
+            success_outcome(MANAGEMENT_ACCOUNT_ID, REGION),
+            success_outcome(MEMBER_ACCOUNT_ID, REGION),
+        ];
+        assert!(!CliApp::scan_fully_failed(&outcomes));
     }
 }

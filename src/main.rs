@@ -54,6 +54,11 @@ fn cwlogs_client_for(creds: &AccountCredentials, region: &str) -> aws_sdk_cloudw
     aws_sdk_cloudwatchlogs::Client::from_conf(config)
 }
 
+/// R-02: STSはグローバルサービスであり、`us-east-1`をエンドポイントリージョンとして
+/// 固定してもAWS標準パーティション（`aws`、商用リージョン）内であれば`--regions`に
+/// 何を指定しても正しく動作する。v1は商用パーティションのみをスコープとしており
+/// （README.md「スコープ制約」参照）、AWS GovCloudや中国リージョン等の非商用
+/// パーティションは対象外である。
 fn sts_client_for(creds: &AccountCredentials) -> aws_sdk_sts::Client {
     let config = aws_sdk_sts::Config::builder()
         .behavior_version(BehaviorVersion::latest())
@@ -367,8 +372,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let accounts = org_discovery.list_active_accounts().await?;
 
-    let audit_log_path = std::path::Path::new("cwsweep-audit.jsonl");
-    let audit_logger: Arc<dyn AuditWrite> = Arc::new(AuditLogger::open(audit_log_path)?);
+    // R-04: 監査ログ出力先は`--audit-log-path`で上書き可能（既定値は後方互換のため
+    // カレントディレクトリ直下`cwsweep-audit.jsonl`を維持）。無効化オプションは
+    // project.md Mandatedにより設けない。
+    let audit_logger: Arc<dyn AuditWrite> = Arc::new(AuditLogger::open(&cli.audit_log_path)?);
 
     let logs_adapter: Arc<dyn DescribeLogGroupsOperations> = Arc::new(CloudWatchLogsAdapter);
     let api_adapter: Arc<dyn ActionApiOperations> = Arc::new(CloudWatchLogsAdapter);
@@ -392,6 +399,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             tracing::warn!(account_id, region, %error, "scan failed for account/region");
         }
+    }
+
+    // R-03: 終了コード方針 — 対象アカウント×リージョンが1件以上あり、かつ全件が
+    // 失敗した場合のみ非ゼロ終了コードを返す。これにより、CI/自動化はスキャン
+    // 全滅と「本当に削除対象0件」を終了コードで区別できる。1件でも成功があれば
+    // 0（正常終了）とし、失敗したアカウント/リージョンは上記の`tracing::warn!`で
+    // 個別にログ出力済み（判定ロジックは`CliApp::scan_fully_failed`にありユニット
+    // テストで検証している）。
+    if CliApp::scan_fully_failed(&outcomes) {
+        return Err(format!(
+            "全{}件のアカウント×リージョンの組み合わせでスキャンに失敗しました。詳細は上記の警告ログを確認してください。",
+            outcomes.len()
+        )
+        .into());
     }
 
     println!("{}", CliApp::render_output(&aggregator, cli.output));
