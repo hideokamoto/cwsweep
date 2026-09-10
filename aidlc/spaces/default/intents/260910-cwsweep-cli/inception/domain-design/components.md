@@ -43,12 +43,13 @@ components:
       管理アカウント自身を含む全アカウントを対象とする。
     responsibilities:
       - アクティブアカウント一覧の取得
-    depends_on: []
+    depends_on:
+      - component: CredentialProvider
+        interaction: アカウント列挙用のクレデンシャルを取得する
+        style: sync
     dependents:
       - component: CliApp
         interaction: アカウント一覧を提供する
-      - component: CredentialProvider
-        interaction: 各アカウントIDに対するクレデンシャル構築を依頼される
     external_dependencies:
       - name: AWS Organizations API
         kind: third-party-api
@@ -72,7 +73,7 @@ components:
     depends_on: []
     dependents:
       - component: OrgDiscovery
-        interaction: アカウント一覧取得のためのクレデンシャルを提供される
+        interaction: アカウント一覧取得のためのクレデンシャルを取得する
       - component: IdentityVerifier
         interaction: 検証対象のクレデンシャルを提供される
       - component: LogGroupScanner
@@ -130,9 +131,10 @@ components:
       - component: IdentityVerifier
         interaction: スキャン前にアカウントID検証を行う
         style: sync
-    dependents:
       - component: ScanAggregator
         interaction: 取得したログループレコードを渡す
+        style: sync
+    dependents: []
     external_dependencies:
       - name: Amazon CloudWatch Logs API
         kind: third-party-api
@@ -247,6 +249,9 @@ components:
     behaviour: >
       対象アカウントID・リージョン・ログループ名一覧・合計バイト数を再掲し、
       最終確認を取る。確認が得られない限りExecutionEngineは呼ばれない。
+      ConfirmationPresenterはActionPlanner所有のPlannedActionを直接ミューテートしない。
+      確認結果（confirmed=true）を反映した確認済みコピーを生成してExecutionEngineへ渡す。
+      元のPlannedAction（ActionPlanner所有）はconfirmed未設定のまま不変とする。
     responsibilities:
       - 実行計画の再掲
       - 最終確認の取得
@@ -286,11 +291,12 @@ components:
       - component: CredentialProvider
         interaction: 実行用クレデンシャルを取得する
         style: sync
+      - component: AuditLogger
+        interaction: 実行結果を渡し記録させる
+        style: sync
     dependents:
       - component: CliApp
         interaction: 実行結果を返す
-      - component: AuditLogger
-        interaction: 実行結果を渡し記録させる
     external_dependencies:
       - name: Amazon CloudWatch Logs API
         kind: third-party-api
