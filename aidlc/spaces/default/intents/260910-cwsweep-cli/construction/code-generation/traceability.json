@@ -1,0 +1,41 @@
+{
+  "stage": "code-generation",
+  "unit": null,
+  "upstream_ids": [
+    "PU-1", "PU-2", "PU-3", "PU-4", "PU-5", "PU-6", "PU-7",
+    "NFR1.2", "NFR1.3", "NFR1.4",
+    "NFR2.1", "NFR2.3", "NFR2.4", "NFR2.5", "NFR2.9",
+    "NFR3.2", "NFR3.3",
+    "NFR4.2", "NFR4.3",
+    "NFR5.1", "NFR5.2"
+  ],
+  "coverage": [
+    { "id": "PU-1", "status": "OK", "target": "src/org_discovery.rs" },
+    { "id": "PU-1", "status": "OK", "target": "src/identity.rs" },
+    { "id": "PU-1", "status": "OK", "target": "src/credentials.rs" },
+    { "id": "PU-2", "status": "OK", "target": "src/scanner.rs" },
+    { "id": "PU-2", "status": "OK", "target": "src/aggregator.rs" },
+    { "id": "PU-3", "status": "OK", "target": "src/output.rs" },
+    { "id": "PU-4", "status": "OK", "target": "src/selector.rs" },
+    { "id": "PU-5", "status": "OK", "target": "src/execution.rs" },
+    { "id": "PU-6", "status": "OK", "target": "src/execution.rs" },
+    { "id": "PU-6", "status": "OK", "target": "src/planner.rs" },
+    { "id": "PU-6", "status": "OK", "target": "src/confirmation.rs" },
+    { "id": "PU-7", "status": "OK", "target": "src/audit.rs" },
+    { "id": "NFR1.2", "status": "OK", "target": "src/scanner.rs" },
+    { "id": "NFR1.3", "status": "OK", "target": "src/aggregator.rs" },
+    { "id": "NFR1.4", "status": "OK", "target": "Cargo.toml (aws-config既定リトライ設定を利用、追加設定不要)" },
+    { "id": "NFR2.1", "status": "OK", "target": "src/credentials.rs" },
+    { "id": "NFR2.3", "status": "OK", "target": "src/identity.rs" },
+    { "id": "NFR2.4", "status": "OK", "target": "src/execution.rs" },
+    { "id": "NFR2.5", "status": "OK", "target": "src/execution.rs" },
+    { "id": "NFR2.9", "status": "OK", "target": "src/selector.rs" },
+    { "id": "NFR3.2", "status": "OK", "target": "src/cli.rs" },
+    { "id": "NFR3.3", "status": "OK", "target": "src/aggregator.rs" },
+    { "id": "NFR4.2", "status": "OK", "target": "src/scanner.rs" },
+    { "id": "NFR4.3", "status": "OK", "target": "src/audit.rs" },
+    { "id": "NFR5.1", "status": "OK", "target": "src/audit.rs" },
+    { "id": "NFR5.2", "status": "OK", "target": "src/cli.rs" }
+  ],
+  "note": "Requirements Analysis と Units Generation はスコープ設計によりスキップされたため、upstream_idsは ideation/scope-definition/intent-backlog.md の Proto-Unit ID（PU-1〜PU-7、Must かつ Out of Scope 外のもの）と construction/nfr-requirements の詳細NFR IDを直接使用している。"
+}

@@ -1,0 +1,234 @@
+version: 2.1
+
+orbs:
+  rust: circleci/rust@1.6.0
+
+executors:
+  rust-executor:
+    docker:
+      - image: cimg/rust:1.82.0
+
+commands:
+  cargo-with-lock:
+    description: "Run a cargo subcommand with --locked (Cargo.lock is committed)"
+    parameters:
+      subcommand:
+        type: string
+    steps:
+      - run:
+          name: "cargo <<parameters.subcommand>> --locked"
+          command: cargo <<parameters.subcommand>> --locked
+
+jobs:
+  fmt:
+    executor: rust-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-registry-{{ checksum "Cargo.lock" }}
+      - run:
+          name: "cargo fmt --check"
+          command: cargo fmt --check
+
+  clippy:
+    executor: rust-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-registry-{{ checksum "Cargo.lock" }}
+      - run:
+          name: "cargo clippy -- -D warnings"
+          command: cargo clippy --all-targets --locked -- -D warnings
+      - save_cache:
+          key: cargo-registry-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+            - target
+
+  test:
+    executor: rust-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-registry-{{ checksum "Cargo.lock" }}
+      - cargo-with-lock:
+          subcommand: build
+      # 実AWSアカウントに接触するテストは #[ignore] で分離済み。通常CI実行では実行しない
+      # （team.mdの合意事項: CIでは実 AWS アカウントに接触するテストを自動実行しない）。
+      - cargo-with-lock:
+          subcommand: test
+
+  coverage:
+    executor: rust-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-registry-{{ checksum "Cargo.lock" }}
+      - run:
+          name: "Install cargo-llvm-cov"
+          command: |
+            if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+              cargo install cargo-llvm-cov --locked
+            fi
+      - run:
+          name: "cargo llvm-cov (行カバレッジ80%floor)"
+          command: |
+            cargo llvm-cov --lib --locked --fail-under-lines 80 --summary-only
+
+  audit:
+    executor: rust-executor
+    steps:
+      - checkout
+      - run:
+          name: "Install cargo-audit"
+          command: |
+            if ! command -v cargo-audit >/dev/null 2>&1; then
+              cargo install cargo-audit --locked
+            fi
+      - run:
+          name: "cargo audit (NFR2.6, 既知脆弱性があればブロック)"
+          command: cargo audit
+
+  deny:
+    executor: rust-executor
+    steps:
+      - checkout
+      - run:
+          name: "Install cargo-deny"
+          command: |
+            if ! command -v cargo-deny >/dev/null 2>&1; then
+              cargo install cargo-deny --locked
+            fi
+      - run:
+          name: "cargo deny check (advisories/licenses/bans/sources, NFR2.7)"
+          command: cargo deny check
+
+  # タグ駆動リリース（team.md: v0.1.0 等のタグpushでクロスプラットフォーム
+  # （Linux/macOS、x86_64/arm64）のリリースバイナリをビルドし GitHub Releases に添付する。
+  # main へのマージ自体はリリースをトリガーしない）
+  release-linux:
+    docker:
+      - image: cimg/rust:1.82.0
+    resource_class: <<parameters.resource_class>>
+    parameters:
+      target:
+        type: string
+      resource_class:
+        type: string
+        default: medium
+    steps:
+      - checkout
+      - run:
+          name: "Install target"
+          command: rustup target add <<parameters.target>>
+      - run:
+          name: "Build release binary"
+          command: cargo build --release --locked --target <<parameters.target>>
+      - run:
+          name: "Package"
+          command: |
+            mkdir -p artifacts
+            tar -czf artifacts/cwsweep-${CIRCLE_TAG}-<<parameters.target>>.tar.gz \
+              -C target/<<parameters.target>>/release cwsweep
+      - persist_to_workspace:
+          root: artifacts
+          paths:
+            - "*.tar.gz"
+
+  release-macos:
+    macos:
+      xcode: "15.3.0"
+    resource_class: <<parameters.resource_class>>
+    parameters:
+      target:
+        type: string
+      resource_class:
+        type: string
+        default: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - run:
+          name: "Install Rust toolchain"
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: "Install target"
+          command: rustup target add <<parameters.target>>
+      - run:
+          name: "Build release binary"
+          command: cargo build --release --locked --target <<parameters.target>>
+      - run:
+          name: "Package"
+          command: |
+            mkdir -p artifacts
+            tar -czf artifacts/cwsweep-${CIRCLE_TAG}-<<parameters.target>>.tar.gz \
+              -C target/<<parameters.target>>/release cwsweep
+      - persist_to_workspace:
+          root: artifacts
+          paths:
+            - "*.tar.gz"
+
+  publish-github-release:
+    docker:
+      - image: cimg/base:2024.01
+    steps:
+      - attach_workspace:
+          at: artifacts
+      - run:
+          name: "Publish to GitHub Releases"
+          command: |
+            echo "アーティファクトをGitHub Releasesへ添付する（GH_TOKEN環境変数はCircleCIプロジェクト設定で管理し、ログに出力しない）"
+            # 例: gh release upload "$CIRCLE_TAG" artifacts/*.tar.gz --clobber
+
+workflows:
+  build-and-test:
+    jobs:
+      - fmt
+      - clippy
+      - test
+      - coverage
+      - audit
+      - deny
+
+  release:
+    jobs:
+      - release-linux:
+          name: release-linux-x86_64
+          target: x86_64-unknown-linux-gnu
+          resource_class: medium
+          filters: &release-filters
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+            branches:
+              ignore: /.*/
+      - release-linux:
+          name: release-linux-arm64
+          target: aarch64-unknown-linux-gnu
+          resource_class: arm.medium
+          filters:
+            <<: *release-filters
+      - release-macos:
+          name: release-macos-x86_64
+          target: x86_64-apple-darwin
+          resource_class: macos.m1.medium.gen1
+          filters:
+            <<: *release-filters
+      - release-macos:
+          name: release-macos-arm64
+          target: aarch64-apple-darwin
+          resource_class: macos.m1.medium.gen1
+          filters:
+            <<: *release-filters
+      - publish-github-release:
+          requires:
+            - release-linux-x86_64
+            - release-linux-arm64
+            - release-macos-x86_64
+            - release-macos-arm64
+          filters:
+            <<: *release-filters

@@ -1,9 +1,9 @@
-# Team-Level Rules
+# チームプラクティス（確定版）
 
-> This team's affirmed practices and corrections. Loaded after `org.md` as
-> strict-additive guidance; contradictions with broader policy are rejected.
-> Populated by the practices-discovery affirmation gate. Edit at the gate,
-> not directly.
+> **ステータス: 確定（affirmed）** — practices-discovery のインタビュー（全7問、回答はすべて A）を経て
+> 確定した内容です。リード（pipeline-deploy-agent）ドラフトを起点に、QA・開発者・DevSecOpsの
+> 3エージェントのブラインドレビューと人間インタビューの結果を統合しています。`team.md` への反映
+> （affirmation）はこの内容に基づいて行います。
 
 ## Way of Working
 
@@ -56,10 +56,6 @@
   （例: `#[ignore]` + 専用ジョブ）、通常の CI 実行では前者を自動実行しない。
 - 既存スイートは常にグリーンを維持する。
 
-## Change Control
-
-<!-- Affirmed by the team. Mode: strict or relaxed. Strict here holds for every intent and cannot be changed from chat. -->
-
 ## Deployment
 
 - 本ツールはサーバーへのデプロイを行わない、スタンドアロンのバイナリ配布物（Rust CLI）である。
@@ -92,14 +88,3 @@
   （`account`, `log_group`, `dry_run` 等）は型名・関数名で一貫させ、略語を避ける。
   スキャン時点の Identity 検証と削除直前の二重 Identity 検証は、役割が名前から読み取れるよう
   別関数として命名を分離する。
-## Forbidden
-
-<!-- Team-specific forbidden patterns -->
-
-## Mandated
-
-<!-- Team-specific mandates -->
-
-## Corrections
-
-<!-- Self-learning loop appends here. -->
