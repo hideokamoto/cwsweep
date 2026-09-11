@@ -40,10 +40,19 @@ zero-Unit（stage-level）のため単一の集計。`cargo llvm-cov --lib --sum
 
 `test-results.md`に最終版を記載（本ファイルでは要約のみ）。全対象目標は`Met`、破壊的操作パスの100%カバレッジ1件のみ既知の`Accepted risk`（Not Metとして正直に記録、後述の理由により本stageの合格判定を妨げない）。詳細は`test-results.md`参照。
 
+## Loop-back 1 後の最終結果
+
+Build and Test完了判定でNot Metとなったため、team.md/project.mdの機械的ゲートに則り人間の「Retry with fix」選択でcode-generationへループバックし、R-01対応の追加テストを実施した（詳細は`test-results.md`の`## Loop-Back Log`参照）。修正後、advisory再レビューで数値・説明の真正性を検証済み（誤魔化しなし）、人間が残存ギャップを再度Accepted riskとして明示的に受容した上でCode Generationを再承認。Build and Testを再実行し、以下の最終結果を得た:
+
+- `cargo test`: 99 unit（既存97+新規2）+ 4 integration、**103件すべてpass**
+- 全体行カバレッジ: 97.19% → **97.47%**（execution.rs 93.66%→95.68%改善）
+- `cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`: 合格
+- 人間の最終判断: 「Accept failure」— R-01（Accepted risk、これ以上の修正は依頼しない）とNFR2.6/2.7（CI Pipelineへの設計上の逆先送り）の2件のみ残存を確定記録し、本stageの承認ゲートへ進む。
+
 ## Readiness Assessment
 
 - **Build-ready**: Yes（`cargo build --locked`成功）
-- **Test-ready**: Yes（97 unit + 4 integration すべてpass、`cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`合格）
+- **Test-ready**: Yes（103件すべてpass、`cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`合格）
 - **Deployment-ready**: Partial — `cargo audit`/`cargo deny check`はCI Pipelineステージの所有物として未実行（ツール未インストール）。team.md/project.mdのMandated要件によりCI必須ゲートとして次stageで導入する。
 
 ## 既知の制限・積み残し事項

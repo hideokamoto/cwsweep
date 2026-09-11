@@ -4,14 +4,14 @@
 
 `cargo build --locked`: **成功**。警告0件。
 
-## テスト結果
+## テスト結果（Loop-back 1後の再実行）
 
 | 種別 | 総数 | Pass | Fail | Skip |
 |---|---|---|---|---|
-| Unit（`cargo test --lib`） | 97 | 97 | 0 | 0 |
+| Unit（`cargo test --lib`） | 99 | 99 | 0 | 0 |
 | 統合（`cargo test --test scan_select_execute --test audit_log_format`） | 4 | 4 | 0 | 0 |
 | Doc-tests | 0 | 0 | 0 | 0 |
-| **合計** | **101** | **101** | **0** | **0** |
+| **合計** | **103** | **103** | **0** | **0** |
 
 失敗テストなし。
 
@@ -22,16 +22,16 @@
 - `grep forbid(unsafe_code)`: `src/main.rs:7`, `src/lib.rs:7`に確認
 - `grep deny(clippy::unwrap_used...)`: `src/main.rs:8`, `src/lib.rs:10`に確認
 
-## カバレッジレポート（`cargo llvm-cov --lib --summary-only`）
+## カバレッジレポート（`cargo llvm-cov --lib --summary-only`、Loop-back 1後）
 
-全体行カバレッジ **97.19%**。モジュール別は`build-and-test-summary.md`参照。
+全体行カバレッジ **97.47%**（execution.rs追加テストにより97.19%→97.47%に改善）。モジュール別は`build-and-test-summary.md`参照。
 
 ## Target Verification Matrix
 
 | Target ID | Source | Expected | Actual | Evidence | Owning Stage | Verdict |
 |---|---|---|---|---|---|---|
 | Testing Contract: 80%行カバレッジfloor | code-generation-plan.md 埋め込みTesting Contract | 全モジュール80%以上 | 全13モジュールとも80%以上（最低90.77%、全体97.19%） | `cargo llvm-cov --lib --summary-only`出力（本ファイル上部） | build-and-test | Met |
-| Testing Contract: 破壊的操作・安全パス100%floor | code-generation-plan.md 埋め込みTesting Contract | execution.rs/audit.rs/identity.rs/selector.rs 100% | selector.rs 100%達成。execution.rs 93.66%, audit.rs 90.77%, identity.rs 99.22%は未達（到達不能分岐のみ） | `cargo llvm-cov --lib --summary-only`出力、`.aidlc-reviews/code-generation/stage/df820a4cc21bd395/1.review.md`（R-01, Accepted risk） | code-generation（既知ギャップとして受容済み） | Not Met（Accepted risk — 新規欠陥ではなく、Code Generation承認ゲートで人間が明示的に受容済み） |
+| Testing Contract: 破壊的操作・安全パス100%floor | code-generation-plan.md 埋め込みTesting Contract | execution.rs/audit.rs/identity.rs/selector.rs 100% | selector.rs 100%達成。Loop-back 1でexecution.rs 93.66%→95.68%（LCOV実行回数0行は0件に到達）、identity.rs 99.22%→99.26%（同0件）に改善。audit.rs 90.77%は変化なし（LCOV実行回数0行17件、構造的に到達不能と検証済み）。残るcargo llvm-cov summary上の未達分（execution.rs/identity.rs）はassert!/matches!マクロ展開由来の測定上のアーティファクトとreview記録で検証済み | `cargo llvm-cov --lib --summary-only`/`--lcov`出力、`.aidlc-reviews/code-generation/stage/30639fec9d25f391/1.review.md`（R-01, 再検証・Accepted risk） | code-generation（Loop-back 1で再検証済み、人間がAccepted riskとして再承認） | Not Met（Accepted risk — Loop-back 1で追加検証を実施済み。execution.rs/identity.rsはLCOV基準で実質到達済み、audit.rsの残存17行は構造的に到達不能と確認の上、人間が明示的に受容） |
 | NFR1.1 | performance-requirements.md | 標準規模で実用上2分以内（設計目標、ハードSLA外） | 自動ベンチマーク未実施。要件文書自体が初期リリースでの自動ベンチマークを必須としないと明記 | performance-requirements.md「Benchmarks」節 | 対象外（設計判断） | N/A |
 | NFR1.2 | performance-requirements.md | ページネーションは逐次呼び出し | `scanner::tests::multi_page_scan_walks_every_page_before_returning`で全ページ逐次取得を検証 | `cargo test --lib scanner::` | build-and-test | Met |
 | NFR1.3 | performance-requirements.md | 数百件規模をメモリ上に全件保持 | `ScanAggregator`は`Vec<LogGroupRecord>`で全件保持する設計。単体テストで複数件の集計を確認 | `cargo test --lib aggregator::` | build-and-test | Met |
@@ -64,7 +64,9 @@
 
 ## Loop-Back Log
 
-### Loop-back 1 — 2026-09-10T23:45:35Z
+### Loop-back 1 — 2026-09-10T23:45:35Z（解決済み）
+
+修正・再レビュー・人間の再承認（Accepted risk）まで完了。execution.rs/identity.rsはLCOV基準で実行回数0行がゼロに到達、audit.rsの残存17行は構造的到達不能と検証された上で受容された。
 
 - **Diagnosis**: Target Verification Matrixの「Testing Contract: 破壊的操作・安全パス100%floor」がNot Met（R-01, Code Generationのadvisoryレビューで既に指摘済み）。`execution.rs`(93.66%)/`audit.rs`(90.77%)/`identity.rs`(99.22%)に到達困難な未カバー分岐（`async_trait`マクロ展開由来の境界コード、`serde_json::to_string`失敗分岐、一部テストで未使用のモックアーム等）が残存。
 - **Root-cause stage**: code-generation（生成されたテストコードのカバレッジ範囲の問題であり、Build and Testのビルド/テスト設定自体に起因しない）。
