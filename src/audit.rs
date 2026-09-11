@@ -78,6 +78,12 @@ impl AuditLogger {
     /// 書き込み・fsyncのいずれかが失敗した場合は`Err`を返す。呼び出し元
     /// （`ExecutionEngine`）はこれを`?`で伝播させ、当該操作を中断しなければならない。
     pub fn append(&self, entry: &AuditEntry) -> Result<(), AuditWriteError> {
+        // R-01: このエラー分岐は構造的に到達不能である。`AuditEntry`のフィールドは
+        // `String` / `bool` / `Option<String>` / `ActionKind`（フィールドなしバリアントを
+        // 持つ列挙型）のみで構成され、非UTF-8マップキーや`NaN`/`Infinity`浮動小数点など
+        // `serde_json::to_string`が失敗しうる要素を一切含まない。そのため呼び出し元の
+        // フィールド構成が変わらない限り`Err`は発生せず、決定的に失敗させるテストは
+        // 書けない（`AuditEntry`自体を不正な状態にする手段が公開APIに存在しない）。
         let line = serde_json::to_string(entry).map_err(|e| AuditWriteError {
             message: format!("failed to serialize audit entry: {e}"),
         })?;
@@ -220,6 +226,16 @@ mod tests {
         assert_eq!(value["success"], false);
         assert_eq!(value["error_message"], "delete-log-group denied");
     }
+
+    // R-01: 以下のフェイク書き込み先群における`flush()`実装は、`std::io::Write`トレイトの
+    // 必須メソッドを満たすためだけに存在し、構造的に到達不能である。`AuditLogger::append`は
+    // `write_all`と`SyncWrite::sync`のみを呼び出し、`flush()`を一切呼ばないため
+    // （明示的な`fsync`で永続化を保証する設計であり、バッファのフラッシュは不要）、
+    // どのテストでもこの分岐には到達しない。同様に`FailingWriteAllWriter`/
+    // `FailingOnSecondWriteWriter`の`sync()`実装も、それぞれ`write`が`?`で先にエラーを
+    // 返して処理が中断するため到達不能であり、これは「1回の失敗だけを決定的に再現する」
+    // という各フェイクの設計上の意図そのものである。到達可能にするための改変
+    // （＝`sync`を先に失敗させる等）は、フェイクの目的自体を損なうため行わない。
 
     /// 常に`write_all`が失敗するフェイク書き込み先。
     struct FailingWriteAllWriter;

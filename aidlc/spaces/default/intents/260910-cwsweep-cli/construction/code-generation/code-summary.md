@@ -50,6 +50,18 @@
 1. **`cargo audit` / `cargo deny check` は本ステージでは未実行。** ツールがこのセッションにインストールされておらず、CIゲートとしての実行手順のみ`README.md`に記載した。CI Pipelineステージで実際の実行・ゲート化を行う必要がある。
 2. **`AuditLogger`の書き込み先抽象化。** 当初設計（`File`直書き）から、書き込み失敗（write失敗・fsync失敗・mutex poison）を決定的にテストするため`SyncWrite`トレイトによる抽象化に変更した。公開APIとfsync付きJSON Linesという設計意図自体は変更していない。
 
+## Build-and-Testループバックへの対応（R-01, Step 19）
+
+Build and Testステージの完了判定でNot MetとなったR-01（破壊的操作パス・安全パス100%パスカバレッジ未達成）について、人間が明示的に「Retry with fix」を選択し、code-generationへループバックした。
+
+- `src/execution.rs`: LCOV基準（実行回数0の行）で未到達だった4行を解消するテストを2件追加（`audit_log_write_failure_aborts_the_operation_for_set_retention`、`execute_true_with_failing_retention_api_call_returns_api_error_after_audit_write`）。既存の`AlwaysFailingApiClient`をテスト間で共有する形にリファクタリングし、`delete_log_group`/`put_retention_policy`双方のアームを確実に実行させた。LCOV基準の実行回数0行は0件になった（`cargo llvm-cov --lib --lcov`で確認）。
+- `src/identity.rs`: LCOV基準の実行回数0行は元々0件（`llvm-cov`summary上の「missed」は`assert!`/`matches!`マクロ展開由来の失敗分岐カウンタであり、テストが成功する限り構造的に到達不能）。到達不能である理由をコード内コメントで明記した（コード変更なし）。
+- `src/audit.rs`: LCOV基準で実行回数0の行が17行残る。内訳は(1) `serde_json::to_string(entry)`の失敗分岐（`AuditEntry`が`String`/`bool`/`Option<String>`/フィールドなし列挙型のみで構成されシリアライズ失敗要素を含まないため構造的に到達不能）、(2) テスト用フェイク書き込み先の`flush()`実装（`AuditLogger::append`が`flush()`を呼ばない設計のため到達不能）、(3) 2種のフェイクの`sync()`（`write`が先にエラーを返す設計上、到達不能）。いずれも到達不能である理由をコード内コメントで明記した（コード変更なし。無理な失敗誘発テストによる数値の偽装は行っていない）。
+
+修正後の`cargo llvm-cov --lib --summary-only`実測: `execution.rs` 95.68%（LCOV実行回数0行: 0件）、`identity.rs` 99.26%（LCOV実行回数0行: 0件）、`audit.rs` 90.77%（変化なし。到達不能箇所のみ残存）。`cargo test`は99 unit（既存97+新規2）+ 4 integration すべてpass。`cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`合格。
+
+**引き続き残る既知のギャップ**: `cargo llvm-cov`のregion/summary集計上は3モジュールとも100%に到達していない。ただし実質的な指標（LCOV基準の行実行回数）で見ると、`execution.rs`/`identity.rs`は既に実行回数0の行がゼロであり、残る差分はマクロ展開由来の測定上のアーティファクトである。`audit.rs`の17行は構造的に到達不能なコードパスであり、テストで到達させることは設計上不可能（無理に到達可能な形に書き換えることは、フェイクの「1回の失敗だけを決定的に再現する」という設計意図やproduction側のI/O設計を損なう）。この残存ギャップは`test-results.md`のTarget Verification Matrixで正直に記録する。
+
 ## レビュー指摘への対応（Request Changes → Revision 1）
 
 advisoryアーキテクチャレビュー（Iteration 1, Verdict: READY, Major 1件/Minor 3件）を受け、人間の明示的な選択によりR-02/R-03/R-04を修正した（R-01は今回の対応対象から明示的に除外され、未解決のまま残る）。

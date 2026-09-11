@@ -152,6 +152,12 @@ mod tests {
                 assert_eq!(m.expected, EXPECTED_ACCOUNT_ID);
                 assert_eq!(m.actual.as_deref(), Some(OTHER_ACCOUNT_ID));
             }
+            // R-01: この`other`アームおよび167行目付近の`assert!(matches!(...))`が生成する
+            // パニック分岐は、テストが期待通りに通過する限り構造的に到達不能である
+            // （`rustc`/`llvm-cov`が`assert!`・`panic!`マクロ展開から生成する失敗経路の
+            // カバレッジ計測上の既知の特性であり、意図的に失敗するテストを書かない限り
+            // 到達させられない）。アサーションを弱めたり無理に失敗させたりする対応は
+            // テストの目的を損なうため行わない。
             other => panic!("expected Mismatch, got {other:?}"),
         }
     }

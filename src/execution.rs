@@ -411,6 +411,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn audit_log_write_failure_aborts_the_operation_for_set_retention() {
+        // R-01: 監査ログ書き込み失敗による中断は、`ActionKind::Delete`だけでなく
+        // `ActionKind::SetRetention`の実行パス（`put_retention_policy`呼び出し）でも
+        // 同様に成立することを決定的に検証する。
+        let identity = Arc::new(AlwaysOkIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let eng = ExecutionEngine::new(
+            Arc::new(FailingApiClientNeverCalled),
+            identity,
+            Arc::new(FailingAuditWriter),
+            "run-1",
+        );
+        let mut action = planned_action("/a");
+        action.action_kind = ActionKind::SetRetention { days: 30 };
+
+        let result = eng
+            .execute_plan(&[action], |id| Some(creds(id)), true)
+            .await;
+
+        assert!(matches!(result, Err(ExecutionError::AuditWrite(_))));
+    }
+
+    #[tokio::test]
     async fn audit_log_write_failure_means_api_result_success_is_never_reported() {
         // APIは成功するがaudit書き込みが失敗するケースでも、呼び出し元へは
         // 成功として報告されず、必ずエラーとして扱われることを確認する（境界値）。
@@ -450,30 +474,33 @@ mod tests {
         assert_eq!(api.delete_calls.load(Ordering::SeqCst), 0);
     }
 
+    /// `delete-log-group`と`put-retention-policy`の両方が常に`AccessDenied`で失敗する
+    /// フェイクAPIクライアント。削除・retention変更の両アクション種別で共有し、両方の
+    /// 実装が確実に実行される（未使用のモックアームを残さない）。
+    struct AlwaysFailingApiClient;
+    #[async_trait]
+    impl ActionApiOperations for AlwaysFailingApiClient {
+        async fn delete_log_group(
+            &self,
+            _c: &AccountCredentials,
+            _r: &str,
+            _l: &str,
+        ) -> Result<(), String> {
+            Err("AccessDenied".to_string())
+        }
+        async fn put_retention_policy(
+            &self,
+            _c: &AccountCredentials,
+            _r: &str,
+            _l: &str,
+            _d: i32,
+        ) -> Result<(), String> {
+            Err("AccessDenied".to_string())
+        }
+    }
+
     #[tokio::test]
     async fn execute_true_with_failing_delete_api_call_returns_api_error_after_audit_write() {
-        struct AlwaysFailingApiClient;
-        #[async_trait]
-        impl ActionApiOperations for AlwaysFailingApiClient {
-            async fn delete_log_group(
-                &self,
-                _c: &AccountCredentials,
-                _r: &str,
-                _l: &str,
-            ) -> Result<(), String> {
-                Err("AccessDenied".to_string())
-            }
-            async fn put_retention_policy(
-                &self,
-                _c: &AccountCredentials,
-                _r: &str,
-                _l: &str,
-                _d: i32,
-            ) -> Result<(), String> {
-                Err("AccessDenied".to_string())
-            }
-        }
-
         let dir = tempfile::tempdir().unwrap();
         let audit_path = dir.path().join("audit.jsonl");
         let logger: Arc<dyn crate::audit::AuditWrite> =
@@ -488,6 +515,32 @@ mod tests {
 
         assert!(matches!(result, Err(ExecutionError::Api(_))));
         // 失敗した実行結果も監査ログには記録されている（success=falseで1行）。
+        let contents = std::fs::read_to_string(&audit_path).unwrap();
+        assert_eq!(contents.lines().count(), 1);
+        assert!(contents.contains("\"success\":false"));
+    }
+
+    #[tokio::test]
+    async fn execute_true_with_failing_retention_api_call_returns_api_error_after_audit_write() {
+        // R-01: `execute_true_with_failing_delete_api_call_returns_api_error_after_audit_write`の
+        // retention版。`put_retention_policy`のAPI失敗経路も、削除と同様にAPIエラーとして
+        // 呼び出し元へ伝播し、失敗結果が監査ログに記録されることを検証する。
+        let dir = tempfile::tempdir().unwrap();
+        let audit_path = dir.path().join("audit.jsonl");
+        let logger: Arc<dyn crate::audit::AuditWrite> =
+            Arc::new(AuditLogger::open(&audit_path).unwrap());
+        let identity = Arc::new(AlwaysOkIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let eng = ExecutionEngine::new(Arc::new(AlwaysFailingApiClient), identity, logger, "run-1");
+        let mut action = planned_action("/a");
+        action.action_kind = ActionKind::SetRetention { days: 30 };
+
+        let result = eng
+            .execute_plan(&[action], |id| Some(creds(id)), true)
+            .await;
+
+        assert!(matches!(result, Err(ExecutionError::Api(_))));
         let contents = std::fs::read_to_string(&audit_path).unwrap();
         assert_eq!(contents.lines().count(), 1);
         assert!(contents.contains("\"success\":false"));
