@@ -20,9 +20,30 @@
   cargo test --test scan_select_execute --test audit_log_format
   ```
 - 破壊的操作パス・安全パスの100%パスカバレッジ確認（該当モジュールに限定）:
-  ```bash
-  cargo llvm-cov --lib --summary-only -- identity::tests execution::tests audit::tests selector::tests
-  ```
+  `cargo llvm-cov ... -- <filter>`の`--`以降は`cargo test`と同様にテストバイナリへの
+  実行フィルタであり、カバレッジ計測対象を特定モジュールに絞るものではない
+  （`-- identity::tests execution::tests audit::tests selector::tests`のように書いても、
+  そのフィルタに一致するテストだけが実行された上で、結果は結局クレート全体のsummaryとして
+  出力されるだけであり、モジュール単位でカバレッジを分離計測できているわけではない）。
+  `cargo llvm-cov`にはモジュール単位でレポートを絞り込むオプションは存在しないため、
+  正しい手順は以下のとおり:
+  1. クレート全体のカバレッジを計測する（テストフィルタは付けない。各安全制御のテストは
+     他モジュールのテストとも整合性を取って実行される必要があるため）:
+     ```bash
+     cargo llvm-cov --lib --summary-only
+     ```
+  2. `--summary-only`はソースファイルごとの内訳を1行ずつ出力する（`Filename`列にファイル名、
+     `Lines`/`Missed Lines`/`Cover`列に当該ファイルの行カバレッジ）。出力の中から対象4ファイルの
+     行を確認する: `identity.rs`（Identity検証）・`execution.rs`（破壊的操作パス・
+     `--execute`未指定時の抑止）・`audit.rs`（監査ログ）・`selector.rs`（マルチセレクト初期状態）。
+  3. 特定モジュールのテストだけを実行して素早く確認したい場合は、`cargo llvm-cov`ではなく
+     `cargo test`側のテストフィルタを使う（カバレッジ計測は行われない、実行確認のみ）:
+     ```bash
+     cargo test --lib identity::
+     cargo test --lib execution::
+     cargo test --lib audit::
+     cargo test --lib selector::
+     ```
 - 実AWSアカウントに接触するテスト（`#[ignore]`）は本ステージのCI必須ゲートに含めない:
   ```bash
   cargo test --test '*' -- --ignored

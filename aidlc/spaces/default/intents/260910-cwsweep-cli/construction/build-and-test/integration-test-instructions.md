@@ -8,8 +8,9 @@ Standard戦略に基づき、主要境界（スキャン→選択→削除の一
 
 ## 実行コマンド
 
+リポジトリルート（`Cargo.toml`が存在するディレクトリ）で実行する。
+
 ```bash
-cd /home/user/cwsweep
 cargo test --test scan_select_execute --test audit_log_format
 ```
 

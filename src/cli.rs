@@ -186,7 +186,7 @@ impl CliApp {
     pub fn plan(
         selected: &[crate::aggregator::LogGroupRecord],
         action_kind: ActionKind,
-    ) -> Vec<PlannedAction> {
+    ) -> Result<Vec<PlannedAction>, crate::error::InvalidRetentionDaysError> {
         ActionPlanner::plan(selected, action_kind)
     }
 
@@ -198,6 +198,9 @@ impl CliApp {
         presenter.confirm(actions, total_bytes)
     }
 
+    /// R-05 (NFR4.2): 1アカウントの`AssumeRole`失敗は当該アカウント分のアクションのみを
+    /// 失敗として扱い、資格情報を取得できた他アカウントの処理は継続する
+    /// （バルクヘッド分離。`scan_all`と同じ方針をexecuteフェーズにも適用する）。
     pub async fn execute(
         &self,
         confirmed_actions: &[PlannedAction],
@@ -210,23 +213,78 @@ impl CliApp {
             self.run_id.clone(),
         );
         let provider = self.credential_provider.clone();
+
         // credentials_by_accountはクロージャとして渡す必要があるため、事前に解決しておく。
-        let mut resolved = std::collections::HashMap::new();
+        // 失敗した場合も`?`で即座に中断せず、そのアカウントIDに対する結果として保持する
+        // （他アカウントの資格情報解決・実行は継続する）。
+        let mut resolved: std::collections::HashMap<
+            String,
+            Result<crate::credentials::AccountCredentials, crate::error::AssumeRoleError>,
+        > = std::collections::HashMap::new();
         for action in confirmed_actions {
-            if let std::collections::hash_map::Entry::Vacant(entry) =
-                resolved.entry(action.account_id.clone())
-            {
-                let creds = provider.credentials_for(&action.account_id).await?;
-                entry.insert(creds);
+            if !resolved.contains_key(&action.account_id) {
+                let result = provider.credentials_for(&action.account_id).await;
+                resolved.insert(action.account_id.clone(), result);
             }
         }
-        engine
+
+        // 資格情報を取得できたアクションのみ`ExecutionEngine`へ渡す。取得できなかった
+        // アクションは、ここで直接失敗した`ExecutionOutcome`として記録する
+        // （元の`confirmed_actions`の順序を保ったまま結果を合成する）。
+        let mut ordered: Vec<Option<ExecutionOutcome>> = vec![None; confirmed_actions.len()];
+        let mut runnable_actions: Vec<PlannedAction> = Vec::new();
+        let mut runnable_indices: Vec<usize> = Vec::new();
+
+        for (idx, action) in confirmed_actions.iter().enumerate() {
+            match resolved.get(&action.account_id) {
+                Some(Ok(_)) => {
+                    runnable_actions.push(action.clone());
+                    runnable_indices.push(idx);
+                }
+                Some(Err(e)) => {
+                    ordered[idx] = Some(ExecutionOutcome {
+                        action: action.clone(),
+                        success: false,
+                        error_message: Some(format!(
+                            "credentials unavailable for account {}: {e}",
+                            action.account_id
+                        )),
+                    });
+                }
+                None => {
+                    // 構造的に到達不能: `resolved`は上のループで全`account_id`について
+                    // 必ずエントリを持つ。万一到達した場合でも、当該アクションを失敗として
+                    // 記録するのみでpanicはしない。
+                    ordered[idx] = Some(ExecutionOutcome {
+                        action: action.clone(),
+                        success: false,
+                        error_message: Some(format!(
+                            "credentials unavailable for account {}: not resolved",
+                            action.account_id
+                        )),
+                    });
+                }
+            }
+        }
+
+        let engine_outcomes = engine
             .execute_plan(
-                confirmed_actions,
-                |account_id| resolved.get(account_id).cloned(),
+                &runnable_actions,
+                |account_id| {
+                    resolved
+                        .get(account_id)
+                        .and_then(|r| r.as_ref().ok())
+                        .cloned()
+                },
                 execute_flag,
             )
-            .await
+            .await?;
+
+        for (idx, outcome) in runnable_indices.into_iter().zip(engine_outcomes) {
+            ordered[idx] = Some(outcome);
+        }
+
+        Ok(ordered.into_iter().flatten().collect())
     }
 }
 
@@ -304,7 +362,7 @@ mod tests {
             account_id: account_id.to_string(),
             access_key_id: "AKIAFIXTURE".to_string(),
             secret_access_key: SecretString::from("secret".to_string()),
-            session_token: SecretString::from("token".to_string()),
+            session_token: Some(SecretString::from("token".to_string())),
             expiration: None,
         }
     }
@@ -528,7 +586,7 @@ mod tests {
             retention_in_days: None,
         }];
 
-        let planned = CliApp::plan(&records, ActionKind::Delete);
+        let planned = CliApp::plan(&records, ActionKind::Delete).unwrap();
 
         assert_eq!(planned.len(), 1);
     }
@@ -596,6 +654,85 @@ mod tests {
 
         assert!(!outcomes[0].success);
         assert_eq!(api.deletes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    // --- CodeRabbit指摘#1: executeフェーズでのAssumeRole失敗バルクヘッド分離のテスト ---
+
+    struct StubAssumeRoleFailsForAccount(&'static str);
+    #[async_trait]
+    impl AssumeRoleOperations for StubAssumeRoleFailsForAccount {
+        async fn assume_role(
+            &self,
+            account_id: &str,
+            role_arn: &str,
+            _session_name: &str,
+        ) -> Result<AccountCredentials, AssumeRoleError> {
+            if account_id == self.0 {
+                Err(AssumeRoleError {
+                    account_id: account_id.to_string(),
+                    role_name: role_arn.to_string(),
+                    message: "access denied".to_string(),
+                })
+            } else {
+                Ok(test_creds(account_id))
+            }
+        }
+    }
+
+    const OTHER_MEMBER_ACCOUNT_ID: &str = "333333333333";
+
+    #[tokio::test]
+    async fn execute_continues_for_other_accounts_when_one_account_assume_role_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = Arc::new(RecordingApi {
+            deletes: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let audit_logger: Arc<dyn AuditWrite> =
+            Arc::new(AuditLogger::open(&dir.path().join("audit.jsonl")).unwrap());
+        let credential_provider = Arc::new(CredentialProvider::with_default_role_name(
+            MANAGEMENT_ACCOUNT_ID,
+            Arc::new(StubAssumeRoleFailsForAccount(MEMBER_ACCOUNT_ID)),
+            test_creds(MANAGEMENT_ACCOUNT_ID),
+        ));
+        let app = CliApp {
+            credential_provider,
+            identity: Arc::new(StubIdentityOk),
+            logs_client: Arc::new(StubDescribeLogGroups),
+            api_client: api.clone(),
+            audit_logger,
+            run_id: "test-run".to_string(),
+        };
+
+        let confirmed = vec![
+            PlannedAction {
+                account_id: MEMBER_ACCOUNT_ID.to_string(),
+                region: REGION.to_string(),
+                log_group_name: "/a".to_string(),
+                action_kind: ActionKind::Delete,
+                confirmed: true,
+            },
+            PlannedAction {
+                account_id: OTHER_MEMBER_ACCOUNT_ID.to_string(),
+                region: REGION.to_string(),
+                log_group_name: "/b".to_string(),
+                action_kind: ActionKind::Delete,
+                confirmed: true,
+            },
+        ];
+
+        let outcomes = app.execute(&confirmed, true).await.unwrap();
+
+        assert_eq!(outcomes.len(), 2);
+        // MEMBER_ACCOUNT_ID分はAssumeRole失敗で失敗として記録されるが、処理は中断しない。
+        assert!(!outcomes[0].success);
+        assert!(outcomes[0]
+            .error_message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("credentials unavailable"));
+        // OTHER_MEMBER_ACCOUNT_ID分は資格情報が取得できたため、正常に実行され成功する。
+        assert!(outcomes[1].success);
+        assert_eq!(api.deletes.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

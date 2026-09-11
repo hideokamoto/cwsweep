@@ -11,9 +11,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 
-use crate::audit::{AuditEntry, AuditWrite};
+use crate::audit::{AuditEntry, AuditEventKind, AuditWrite};
 use crate::credentials::AccountCredentials;
-use crate::error::{ExecutionApiError, ExecutionError};
+use crate::error::ExecutionError;
 use crate::identity::IdentityCheck;
 use crate::planner::{ActionKind, PlannedAction};
 
@@ -71,10 +71,21 @@ impl ExecutionEngine {
     /// 返すのみで、`delete-log-group`/`put-retention-policy`のAPI呼び出しコード自体を
     /// 一切通過しない。
     ///
-    /// `execute=true`の場合のみ、各アクションにつき:
-    /// 1. スキャン時点とは独立した二重目のIdentity検証を再実行する。
-    /// 2. 検証通過後にAPIを呼び出す。
-    /// 3. 結果を監査ログへ記録する（記録に失敗した場合は当該操作を中断しエラーとして扱う）。
+    /// `execute=true`の場合、各アクションにつき:
+    /// 1. 資格情報が解決できない場合、当該アクションのみを失敗として記録し、他の
+    ///    アクションの処理は継続する（NFR4.2バルクヘッド分離。呼び出し元が資格情報
+    ///    解決に失敗したアカウントの扱いを決められるよう、計画全体を中断しない）。
+    /// 2. スキャン時点とは独立した二重目のIdentity検証を再実行する（失敗した場合は
+    ///    即時に計画全体を中断する — NFR2.3/2.5）。
+    /// 3. API呼び出し「前」に実行意図(`Intent`)を監査ログへ記録する。この書き込みに
+    ///    失敗した場合はAPIを呼び出さずに即時に計画全体を中断する（NFR4.3。不可逆操作の
+    ///    記録なき実行を許さない）。
+    /// 4. APIを呼び出す。
+    /// 5. API呼び出し「後」に結果(`Result`、成功/失敗いずれも)を監査ログへ記録する。
+    ///    この書き込みに失敗した場合も即時に計画全体を中断する（NFR4.3、既存どおり）。
+    /// 6. API呼び出し自体の失敗（例: AccessDenied）は当該アクションのみの失敗として
+    ///    `ExecutionOutcome`に記録し、他の独立したアクションの処理は継続する
+    ///    （NFR4.2。計画全体を中断しない）。
     pub async fn execute_plan(
         &self,
         confirmed_actions: &[PlannedAction],
@@ -96,16 +107,39 @@ impl ExecutionEngine {
 
         let mut outcomes = Vec::with_capacity(confirmed_actions.len());
         for action in confirmed_actions {
-            let creds =
-                credentials_by_account(&action.account_id).ok_or_else(|| ExecutionApiError {
-                    account_id: action.account_id.clone(),
-                    region: action.region.clone(),
-                    log_group_name: action.log_group_name.clone(),
-                    message: "no credentials resolved for account".to_string(),
-                })?;
+            let creds = match credentials_by_account(&action.account_id) {
+                Some(c) => c,
+                None => {
+                    // NFR4.2: 資格情報が解決できないアクションのみを失敗として記録し、
+                    // 他の独立したアクションの処理は継続する（計画全体を中断しない）。
+                    outcomes.push(ExecutionOutcome {
+                        action: action.clone(),
+                        success: false,
+                        error_message: Some("no credentials resolved for account".to_string()),
+                    });
+                    continue;
+                }
+            };
 
             // 削除・retention変更の直前に独立した二重目のIdentity検証を再実行する。
+            // Identity不一致は即時に計画全体を中断する（他アクションへは継続しない）。
             self.identity.verify(&creds, &action.account_id).await?;
+
+            // API呼び出し「前」に実行意図(intent)を監査ログへ記録する。この追記に
+            // 失敗した場合はAPIを一切呼び出さず即時に計画全体を中断する
+            // （削除済みなのに記録がどこにも残らない、という状態を作らない）。
+            let intent_entry = AuditEntry {
+                run_id: self.run_id.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+                account_id: action.account_id.clone(),
+                region: action.region.clone(),
+                log_group_name: action.log_group_name.clone(),
+                action_kind: action.action_kind,
+                event: AuditEventKind::Intent,
+                success: false,
+                error_message: None,
+            };
+            self.audit_logger.append(&intent_entry)?;
 
             let api_result = match action.action_kind {
                 ActionKind::Delete => {
@@ -125,30 +159,27 @@ impl ExecutionEngine {
                 Err(msg) => (false, Some(msg.clone())),
             };
 
-            let entry = AuditEntry {
+            // API呼び出し「後」に結果(result)を監査ログへ記録する。
+            let result_entry = AuditEntry {
                 run_id: self.run_id.clone(),
                 timestamp: Utc::now().to_rfc3339(),
                 account_id: action.account_id.clone(),
                 region: action.region.clone(),
                 log_group_name: action.log_group_name.clone(),
                 action_kind: action.action_kind,
+                event: AuditEventKind::Result,
                 success,
                 error_message: error_message.clone(),
             };
 
-            // 監査ログ書き込みに失敗した場合、実行中の操作自体を中断しエラーとして扱う。
-            self.audit_logger.append(&entry)?;
+            // 監査ログ書き込みに失敗した場合、実行中の操作自体を中断しエラーとして扱う
+            // （既存どおり: 結果の記録なき「成功扱い」を許さない）。
+            self.audit_logger.append(&result_entry)?;
 
-            if let Err(msg) = api_result {
-                return Err(ExecutionApiError {
-                    account_id: action.account_id.clone(),
-                    region: action.region.clone(),
-                    log_group_name: action.log_group_name.clone(),
-                    message: msg,
-                }
-                .into());
-            }
-
+            // NFR4.2: API呼び出し自体の失敗（AccessDenied等）は当該アクションのみの
+            // 失敗として記録し、他の独立したアクションの処理は継続する
+            // （計画全体を中断しない。旧実装は`return Err`しており、既に成功した
+            // アクションの`ExecutionOutcome`が呼び出し元へ返らない問題があった）。
             outcomes.push(ExecutionOutcome {
                 action: action.clone(),
                 success,
@@ -176,7 +207,7 @@ mod tests {
             account_id: account_id.to_string(),
             access_key_id: "AKIAFIXTURE".to_string(),
             secret_access_key: SecretString::from("secret".to_string()),
-            session_token: SecretString::from("token".to_string()),
+            session_token: Some(SecretString::from("token".to_string())),
             expiration: None,
         }
     }
@@ -467,9 +498,12 @@ mod tests {
         let eng = engine(api.clone(), identity.clone(), &dir);
         let actions = vec![planned_action("/a")];
 
-        let result = eng.execute_plan(&actions, |_id| None, true).await;
+        // R-06 (NFR4.2): 資格情報が解決できないアクションは、計画全体を中断する`Err`
+        // ではなく、当該アクションのみを失敗とした`ExecutionOutcome`として返す。
+        let outcomes = eng.execute_plan(&actions, |_id| None, true).await.unwrap();
 
-        assert!(matches!(result, Err(ExecutionError::Api(_))));
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].success);
         assert_eq!(identity.calls.load(Ordering::SeqCst), 0);
         assert_eq!(api.delete_calls.load(Ordering::SeqCst), 0);
     }
@@ -500,7 +534,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn execute_true_with_failing_delete_api_call_returns_api_error_after_audit_write() {
+    async fn execute_true_with_failing_delete_api_call_records_failure_and_continues() {
+        // R-07 (NFR4.2): API呼び出し自体の失敗（AccessDenied等）は、計画全体を中断する
+        // `Err`ではなく、当該アクションのみを失敗とした`ExecutionOutcome`として返す。
         let dir = tempfile::tempdir().unwrap();
         let audit_path = dir.path().join("audit.jsonl");
         let logger: Arc<dyn crate::audit::AuditWrite> =
@@ -511,20 +547,29 @@ mod tests {
         let eng = ExecutionEngine::new(Arc::new(AlwaysFailingApiClient), identity, logger, "run-1");
         let actions = vec![planned_action("/a")];
 
-        let result = eng.execute_plan(&actions, |id| Some(creds(id)), true).await;
+        let outcomes = eng
+            .execute_plan(&actions, |id| Some(creds(id)), true)
+            .await
+            .unwrap();
 
-        assert!(matches!(result, Err(ExecutionError::Api(_))));
-        // 失敗した実行結果も監査ログには記録されている（success=falseで1行）。
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].success);
+        assert_eq!(outcomes[0].error_message.as_deref(), Some("AccessDenied"));
+        // R-08 (二段階記録): 失敗した実行結果も、intent（実行前）とresult（実行後）の
+        // 2行として監査ログに記録されている。
         let contents = std::fs::read_to_string(&audit_path).unwrap();
-        assert_eq!(contents.lines().count(), 1);
-        assert!(contents.contains("\"success\":false"));
+        let lines: Vec<&str> = contents.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"event\":\"intent\""));
+        assert!(lines[1].contains("\"event\":\"result\""));
+        assert!(lines[1].contains("\"success\":false"));
     }
 
     #[tokio::test]
-    async fn execute_true_with_failing_retention_api_call_returns_api_error_after_audit_write() {
-        // R-01: `execute_true_with_failing_delete_api_call_returns_api_error_after_audit_write`の
-        // retention版。`put_retention_policy`のAPI失敗経路も、削除と同様にAPIエラーとして
-        // 呼び出し元へ伝播し、失敗結果が監査ログに記録されることを検証する。
+    async fn execute_true_with_failing_retention_api_call_records_failure_and_continues() {
+        // R-01: `execute_true_with_failing_delete_api_call_records_failure_and_continues`の
+        // retention版。`put_retention_policy`のAPI失敗経路も、削除と同様に当該アクションのみの
+        // 失敗として記録され、計画全体は中断しない。
         let dir = tempfile::tempdir().unwrap();
         let audit_path = dir.path().join("audit.jsonl");
         let logger: Arc<dyn crate::audit::AuditWrite> =
@@ -536,13 +581,123 @@ mod tests {
         let mut action = planned_action("/a");
         action.action_kind = ActionKind::SetRetention { days: 30 };
 
-        let result = eng
+        let outcomes = eng
             .execute_plan(&[action], |id| Some(creds(id)), true)
-            .await;
+            .await
+            .unwrap();
 
-        assert!(matches!(result, Err(ExecutionError::Api(_))));
+        assert_eq!(outcomes.len(), 1);
+        assert!(!outcomes[0].success);
         let contents = std::fs::read_to_string(&audit_path).unwrap();
-        assert_eq!(contents.lines().count(), 1);
+        assert_eq!(contents.lines().count(), 2);
         assert!(contents.contains("\"success\":false"));
+    }
+
+    #[tokio::test]
+    async fn execute_true_continues_past_a_failing_action_and_still_executes_the_next_one() {
+        // R-07 (NFR4.2): 1件目のAPI呼び出しが失敗しても、2件目の独立したアクションの
+        // 処理は継続される（計画全体が中断されない）。
+        struct FailFirstThenSucceedApi {
+            calls: AtomicUsize,
+        }
+        #[async_trait]
+        impl ActionApiOperations for FailFirstThenSucceedApi {
+            async fn delete_log_group(
+                &self,
+                _c: &AccountCredentials,
+                _r: &str,
+                _l: &str,
+            ) -> Result<(), String> {
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                if n == 0 {
+                    Err("AccessDenied".to_string())
+                } else {
+                    Ok(())
+                }
+            }
+            async fn put_retention_policy(
+                &self,
+                _c: &AccountCredentials,
+                _r: &str,
+                _l: &str,
+                _d: i32,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let logger: Arc<dyn crate::audit::AuditWrite> =
+            Arc::new(AuditLogger::open(&dir.path().join("audit.jsonl")).unwrap());
+        let identity = Arc::new(AlwaysOkIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let api = Arc::new(FailFirstThenSucceedApi {
+            calls: AtomicUsize::new(0),
+        });
+        let eng = ExecutionEngine::new(api, identity, logger, "run-1");
+        let actions = vec![planned_action("/a"), planned_action("/b")];
+
+        let outcomes = eng
+            .execute_plan(&actions, |id| Some(creds(id)), true)
+            .await
+            .unwrap();
+
+        assert_eq!(outcomes.len(), 2);
+        assert!(!outcomes[0].success);
+        assert!(outcomes[1].success);
+    }
+
+    #[tokio::test]
+    async fn execute_true_writes_intent_entry_before_calling_the_api() {
+        // R-08: API呼び出し「前」にintentエントリが書き込まれることを、書き込み順を
+        // 記録するスパイの監査ロガーで直接検証する。
+        struct OrderRecordingAuditWriter {
+            events: std::sync::Mutex<Vec<crate::audit::AuditEventKind>>,
+        }
+        impl crate::audit::AuditWrite for OrderRecordingAuditWriter {
+            fn append(&self, entry: &AuditEntry) -> Result<(), crate::error::AuditWriteError> {
+                self.events.lock().unwrap().push(entry.event);
+                Ok(())
+            }
+        }
+
+        let identity = Arc::new(AlwaysOkIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let api = Arc::new(CountingApiClient::new());
+        let logger = Arc::new(OrderRecordingAuditWriter {
+            events: std::sync::Mutex::new(Vec::new()),
+        });
+        let eng = ExecutionEngine::new(api.clone(), identity, logger.clone(), "run-1");
+        let actions = vec![planned_action("/a")];
+
+        eng.execute_plan(&actions, |id| Some(creds(id)), true)
+            .await
+            .unwrap();
+
+        let events = logger.events.lock().unwrap().clone();
+        assert_eq!(events, vec![AuditEventKind::Intent, AuditEventKind::Result]);
+        // APIが呼ばれる前にintentが書けているという因果関係を、少なくとも
+        // 削除APIが1回呼ばれたこととあわせて確認する。
+        assert_eq!(api.delete_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn execute_true_never_calls_api_when_intent_audit_write_fails() {
+        // R-08: intentエントリの書き込みに失敗した場合、APIは一切呼び出されず
+        // 即時に計画全体を中断する（削除済みなのに記録が残らない状態を作らない）。
+        let identity = Arc::new(AlwaysOkIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let api = Arc::new(CountingApiClient::new());
+        let eng =
+            ExecutionEngine::new(api.clone(), identity, Arc::new(FailingAuditWriter), "run-1");
+        let actions = vec![planned_action("/a")];
+
+        let result = eng.execute_plan(&actions, |id| Some(creds(id)), true).await;
+
+        assert!(matches!(result, Err(ExecutionError::AuditWrite(_))));
+        assert_eq!(api.delete_calls.load(Ordering::SeqCst), 0);
     }
 }

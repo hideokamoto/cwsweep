@@ -30,7 +30,7 @@ fn creds(account_id: &str) -> AccountCredentials {
         account_id: account_id.to_string(),
         access_key_id: "AKIAFIXTURE".to_string(),
         secret_access_key: SecretString::from("secret".to_string()),
-        session_token: SecretString::from("token".to_string()),
+        session_token: Some(SecretString::from("token".to_string())),
         expiration: None,
     }
 }
@@ -220,7 +220,7 @@ async fn full_pipeline_scan_select_confirm_dry_run_never_calls_delete_api() {
     );
 
     // --- 計画 ---
-    let planned = ActionPlanner::plan(&selected, ActionKind::Delete);
+    let planned = ActionPlanner::plan(&selected, ActionKind::Delete).unwrap();
     assert_eq!(planned.len(), 1);
 
     // --- 確認 ---
@@ -293,7 +293,7 @@ async fn full_pipeline_with_execute_true_calls_delete_and_writes_audit_log() {
         .collect();
     let selected = selector.select(&items).unwrap();
 
-    let planned = ActionPlanner::plan(&selected, ActionKind::Delete);
+    let planned = ActionPlanner::plan(&selected, ActionKind::Delete).unwrap();
     let presenter = ConfirmationPresenter::new(AlwaysConfirm);
     let total_bytes: i64 = selected.iter().map(|r| r.stored_bytes).sum();
     let confirmed = presenter.confirm(&planned, total_bytes).unwrap();
@@ -321,6 +321,10 @@ async fn full_pipeline_with_execute_true_calls_delete_and_writes_audit_log() {
     assert!(outcomes[0].success);
 
     let contents = std::fs::read_to_string(&audit_path).unwrap();
-    assert_eq!(contents.lines().count(), 1);
+    // CodeRabbit指摘#8: API呼び出しの前後で二段階（intent/result）記録されるため2行。
+    let lines: Vec<&str> = contents.lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[0].contains("\"event\":\"intent\""));
+    assert!(lines[1].contains("\"event\":\"result\""));
     assert!(contents.contains(MEMBER_ACCOUNT_ID));
 }

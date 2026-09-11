@@ -33,10 +33,16 @@ use cwsweep::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem, 
 const RETRY_MAX_ATTEMPTS: u32 = 3;
 
 fn to_sdk_credentials(creds: &AccountCredentials) -> aws_sdk_sts::config::Credentials {
+    // `session_token`が`None`（長期IAMクレデンシャル等、セッショントークンを伴わない場合）は
+    // `None`のままAWS SDKへ渡す。`Some(String::new())`（空文字列）とは意味が異なるため、
+    // ここで`unwrap_or_default`のような変換を行ってはならない。
     aws_sdk_sts::config::Credentials::new(
         creds.access_key_id.clone(),
         creds.secret_access_key.expose_secret().to_string(),
-        Some(creds.session_token.expose_secret().to_string()),
+        creds
+            .session_token
+            .as_ref()
+            .map(|t| t.expose_secret().to_string()),
         None,
         "cwsweep",
     )
@@ -105,7 +111,7 @@ impl AssumeRoleOperations for StsAssumeRoleAdapter {
             account_id: account_id.to_string(),
             access_key_id: creds.access_key_id,
             secret_access_key: SecretString::from(creds.secret_access_key),
-            session_token: SecretString::from(creds.session_token),
+            session_token: Some(SecretString::from(creds.session_token)),
             expiration: Some(creds.expiration.to_string()),
         })
     }
@@ -270,17 +276,18 @@ impl MultiSelectPrompt for InquireMultiSelectPrompt {
         default_selected_indices: &[usize],
     ) -> Result<Vec<usize>, SelectorError> {
         let options: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+        // CodeRabbit指摘#4: `--regions`に同一リージョンを複数回指定できる
+        // （`ScanAggregator::add_all`は重複除去しない）ため、同一ラベルの項目が
+        // 複数件存在しうる。`prompt()`（ラベル文字列のみを返す）で選択を復元すると
+        // ラベル文字列一致になり、同じラベルを持つ項目が全て選択扱いになってしまう。
+        // `raw_prompt()`は選択された項目それぞれの元のインデックス(`ListOption::index`)を
+        // 返すため、ラベルの重複に関わらず選択されたインデックスのみを正しく復元できる。
         let selected =
             inquire::MultiSelect::new("削除・retention変更の対象を選択してください:", options)
                 .with_default(default_selected_indices)
-                .prompt()
+                .raw_prompt()
                 .map_err(|e| SelectorError(e.to_string()))?;
-        Ok(items
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| selected.contains(&item.label))
-            .map(|(i, _)| i)
-            .collect())
+        Ok(selected.into_iter().map(|opt| opt.index).collect())
     }
 }
 
@@ -293,6 +300,23 @@ impl ConfirmPrompt for InquireConfirmPrompt {
         println!("対象リージョン: {:?}", summary.regions);
         println!("対象ログループ: {:?}", summary.log_group_names);
         println!("合計バイト数: {}", summary.total_bytes);
+        // CodeRabbit指摘#3: アカウント/リージョン/ログループ名の独立配列だけでは、
+        // 異なるアカウント/リージョンに同名のロググループがある場合に対応関係が
+        // 失われる。`targets`は1件ごとの対応関係（＋アクション種別）を保持しており、
+        // ここで対象一覧として1行ずつ再掲する。
+        println!("--- 実行対象一覧（対応関係付き） ---");
+        for target in &summary.targets {
+            let action_label = match target.action_kind {
+                cwsweep::planner::ActionKind::Delete => "delete".to_string(),
+                cwsweep::planner::ActionKind::SetRetention { days } => {
+                    format!("set-retention({days}日)")
+                }
+            };
+            println!(
+                "  - account={} region={} log_group={} action={}",
+                target.account_id, target.region, target.log_group_name, action_label
+            );
+        }
         inquire::Confirm::new("上記の内容で実行してよろしいですか？")
             .with_default(false)
             .prompt()
@@ -338,9 +362,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         account_id: String::new(),
         access_key_id: raw_creds.access_key_id().to_string(),
         secret_access_key: SecretString::from(raw_creds.secret_access_key().to_string()),
-        session_token: SecretString::from(
-            raw_creds.session_token().unwrap_or_default().to_string(),
-        ),
+        session_token: raw_creds
+            .session_token()
+            .map(|t| SecretString::from(t.to_string())),
         expiration: None,
     };
 
@@ -430,7 +454,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let action_kind = action_kind_from_prompt()?;
-    let planned = CliApp::plan(&selected, action_kind);
+    let planned = CliApp::plan(&selected, action_kind)?;
     let total_bytes: i64 = selected.iter().map(|r| r.stored_bytes).sum();
 
     let presenter = ConfirmationPresenter::new(InquireConfirmPrompt);
@@ -453,4 +477,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn creds_with_session_token(session_token: Option<&str>) -> AccountCredentials {
+        AccountCredentials {
+            account_id: "111111111111".to_string(),
+            access_key_id: "AKIAFIXTURE".to_string(),
+            secret_access_key: SecretString::from("secret".to_string()),
+            session_token: session_token.map(|t| SecretString::from(t.to_string())),
+            expiration: None,
+        }
+    }
+
+    // CodeRabbit指摘#2: `session_token`が`None`の場合、AWS SDKには`Some("")`ではなく
+    // `None`のまま渡す必要がある（`None`と`Some("")`はAWS SDK上で意味が異なり、長期IAM
+    // クレデンシャルでの認証が`Some("")`だと失敗しうる）。
+
+    #[test]
+    fn to_sdk_credentials_passes_none_session_token_through_as_none() {
+        let creds = creds_with_session_token(None);
+
+        let sdk_creds = to_sdk_credentials(&creds);
+
+        assert_eq!(sdk_creds.session_token(), None);
+    }
+
+    #[test]
+    fn to_sdk_credentials_passes_some_session_token_through_as_some() {
+        let creds = creds_with_session_token(Some("a-session-token"));
+
+        let sdk_creds = to_sdk_credentials(&creds);
+
+        assert_eq!(sdk_creds.session_token(), Some("a-session-token"));
+    }
 }

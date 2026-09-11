@@ -1,6 +1,6 @@
 //! 監査ログの出力内容（フォーマット・必須フィールド）を検証する専用統合テスト。
 
-use cwsweep::audit::{AuditEntry, AuditLogger};
+use cwsweep::audit::{AuditEntry, AuditEventKind, AuditLogger};
 use cwsweep::planner::ActionKind;
 
 fn sample_entry(success: bool) -> AuditEntry {
@@ -11,6 +11,7 @@ fn sample_entry(success: bool) -> AuditEntry {
         region: "ap-northeast-1".to_string(),
         log_group_name: "/aws/lambda/example".to_string(),
         action_kind: ActionKind::Delete,
+        event: AuditEventKind::Result,
         success,
         error_message: if success {
             None

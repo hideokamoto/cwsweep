@@ -65,13 +65,16 @@ impl LogGroupScanner {
         account_id: &str,
         region: &str,
     ) -> Result<Vec<LogGroupRecord>, ScanError> {
-        self.identity.verify(creds, account_id).await?;
-
         let mut all_records = Vec::new();
         let mut next_token: Option<String> = None;
         let mut page_index = 0usize;
 
         loop {
+            // NFR2.3: 各AWS API呼び出し（各ページの`describe-log-groups`呼び出し）の
+            // 直前に毎回`sts:get-caller-identity`を実行する。ページネーション開始前の
+            // 1回だけでは、途中でクレデンシャルの実効アカウントが変わった場合を検知できない。
+            self.identity.verify(creds, account_id).await?;
+
             let page = self
                 .logs_client
                 .describe_log_groups_page(creds, region, next_token.clone())
@@ -122,7 +125,7 @@ mod tests {
             account_id: ACCOUNT_ID.to_string(),
             access_key_id: "AKIAFIXTURE".to_string(),
             secret_access_key: SecretString::from("secret".to_string()),
-            session_token: SecretString::from("token".to_string()),
+            session_token: Some(SecretString::from("token".to_string())),
             expiration: None,
         }
     }
@@ -132,6 +135,45 @@ mod tests {
     impl IdentityCheck for AlwaysOkIdentity {
         async fn verify(&self, _c: &AccountCredentials, _e: &str) -> Result<(), IdentityError> {
             Ok(())
+        }
+    }
+
+    /// 呼び出し回数を記録するIdentityスタブ。CodeRabbit指摘#6:
+    /// 各ページ取得の直前に毎回Identity検証が実行されることを検証するために使う。
+    struct CountingIdentity {
+        calls: AtomicUsize,
+    }
+    #[async_trait]
+    impl IdentityCheck for CountingIdentity {
+        async fn verify(&self, _c: &AccountCredentials, _e: &str) -> Result<(), IdentityError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// 指定した呼び出し回数目（1始まり）以降で不一致エラーを返すIdentityスタブ。
+    /// ページネーション途中でIdentity検証が失敗するケースを再現する。
+    struct FailsFromNthCallIdentity {
+        calls: AtomicUsize,
+        fail_from_call: usize,
+    }
+    #[async_trait]
+    impl IdentityCheck for FailsFromNthCallIdentity {
+        async fn verify(
+            &self,
+            _c: &AccountCredentials,
+            expected: &str,
+        ) -> Result<(), IdentityError> {
+            let n = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
+            if n >= self.fail_from_call {
+                Err(crate::error::IdentityMismatchError {
+                    expected: expected.to_string(),
+                    actual: Some("999999999999".to_string()),
+                }
+                .into())
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -227,6 +269,60 @@ mod tests {
         assert_eq!(client.calls.load(Ordering::SeqCst), 3);
         let names: Vec<&str> = records.iter().map(|r| r.log_group_name.as_str()).collect();
         assert_eq!(names, vec!["/a", "/b", "/c"]);
+    }
+
+    // --- CodeRabbit指摘#6: ページネーション中のIdentity検証が各ページ直前で行われること ---
+
+    #[tokio::test]
+    async fn identity_check_runs_once_per_page_across_multiple_pages() {
+        let client = Arc::new(MultiPageClient {
+            pages: Mutex::new(vec![
+                Ok(page(&["/a"], Some("token-2"))),
+                Ok(page(&["/b"], Some("token-3"))),
+                Ok(page(&["/c"], None)),
+            ]),
+            calls: AtomicUsize::new(0),
+        });
+        let identity = Arc::new(CountingIdentity {
+            calls: AtomicUsize::new(0),
+        });
+        let scanner = LogGroupScanner::new(client.clone(), identity.clone());
+
+        let records = scanner
+            .scan_account_region(&creds(), ACCOUNT_ID, REGION)
+            .await
+            .unwrap();
+
+        assert_eq!(records.len(), 3);
+        // 1ページ目の取得前だけでなく、3ページ全て（各ページ取得の直前）に検証が走る。
+        assert_eq!(identity.calls.load(Ordering::SeqCst), 3);
+        assert_eq!(client.calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn identity_check_failure_on_a_later_page_stops_before_fetching_that_page() {
+        // 境界値: 1ページ目のIdentity検証は成功するが、2ページ目取得直前の検証が
+        // 不一致で失敗するケース。2ページ目のAPI呼び出し自体が行われてはならない。
+        let client = Arc::new(MultiPageClient {
+            pages: Mutex::new(vec![
+                Ok(page(&["/a"], Some("token-2"))),
+                Ok(page(&["/b"], None)),
+            ]),
+            calls: AtomicUsize::new(0),
+        });
+        let identity = Arc::new(FailsFromNthCallIdentity {
+            calls: AtomicUsize::new(0),
+            fail_from_call: 2,
+        });
+        let scanner = LogGroupScanner::new(client.clone(), identity);
+
+        let result = scanner
+            .scan_account_region(&creds(), ACCOUNT_ID, REGION)
+            .await;
+
+        assert!(matches!(result, Err(ScanError::Identity(_))));
+        // 2ページ目のIdentity検証で失敗したため、2ページ目のAPI呼び出しは発生しない。
+        assert_eq!(client.calls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

@@ -17,12 +17,17 @@ use crate::error::AssumeRoleError;
 /// `secret_access_key` / `session_token` は `secrecy::SecretString` でラップし、
 /// `Debug` は手動実装で `[REDACTED]` にマスクする（project.md Forbidden: クレデンシャル構造体の
 /// `{:?}` 丸ごとダンプ禁止）。
+///
+/// `session_token` は `Option<SecretString>` とする。AWS SDKにとって`None`（セッション
+/// トークンなし＝長期IAMクレデンシャル）と`Some("")`（空文字列のトークン）は意味が異なるため、
+/// 「トークンが存在しない」という状態を`None`のまま呼び出し元（`to_sdk_credentials`）まで
+/// 伝播させる必要がある（`AssumeRole`由来のクレデンシャルは常に`Some`になる）。
 #[derive(Clone)]
 pub struct AccountCredentials {
     pub account_id: String,
     pub access_key_id: String,
     pub secret_access_key: SecretString,
-    pub session_token: SecretString,
+    pub session_token: Option<SecretString>,
     pub expiration: Option<String>,
 }
 
@@ -32,7 +37,10 @@ impl fmt::Debug for AccountCredentials {
             .field("account_id", &self.account_id)
             .field("access_key_id", &self.access_key_id)
             .field("secret_access_key", &"[REDACTED]")
-            .field("session_token", &"[REDACTED]")
+            .field(
+                "session_token",
+                &self.session_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .field("expiration", &self.expiration)
             .finish()
     }
@@ -125,7 +133,7 @@ mod tests {
             account_id: account_id.to_string(),
             access_key_id: format!("AKIA{account_id}"),
             secret_access_key: SecretString::from(format!("secret-for-{account_id}")),
-            session_token: SecretString::from(format!("token-for-{account_id}")),
+            session_token: Some(SecretString::from(format!("token-for-{account_id}"))),
             expiration: None,
         }
     }

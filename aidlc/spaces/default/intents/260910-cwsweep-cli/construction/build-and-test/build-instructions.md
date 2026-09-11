@@ -18,8 +18,9 @@ rustup component add rustfmt clippy
 
 ## ビルドコマンド
 
+リポジトリルート（`Cargo.toml`が存在するディレクトリ）で実行する。
+
 ```bash
-cd /home/user/cwsweep
 cargo build --locked
 ```
 

@@ -13,6 +13,19 @@ use serde::{Deserialize, Serialize};
 use crate::error::AuditWriteError;
 use crate::planner::ActionKind;
 
+/// 監査ログの1行が「実行意図」を表すのか「結果」を表すのかを区別する。
+///
+/// CodeRabbit指摘#8: 削除成功後に監査ログ追記が失敗すると、不可逆操作の記録が
+/// どこにも残らない問題への対応。`ExecutionEngine`はAPI呼び出しの「前」に
+/// `Intent`エントリを追記し（追記が失敗した場合はAPIを呼び出さずに中断する）、
+/// API呼び出しの「後」に`Result`エントリを追記する（成功/失敗いずれも記録する）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditEventKind {
+    Intent,
+    Result,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuditEntry {
     pub run_id: String,
@@ -21,6 +34,10 @@ pub struct AuditEntry {
     pub region: String,
     pub log_group_name: String,
     pub action_kind: ActionKind,
+    /// このエントリが実行意図(`Intent`)か結果(`Result`)かを示す。
+    pub event: AuditEventKind,
+    /// `event == Intent`の場合は結果未確定のため`false`のプレースホルダ値
+    /// （`event`を見ずにこのフィールド単体を成功/失敗判定に使ってはならない）。
     pub success: bool,
     pub error_message: Option<String>,
 }
@@ -119,6 +136,7 @@ mod tests {
             region: "us-east-1".to_string(),
             log_group_name: "/aws/lambda/foo".to_string(),
             action_kind: ActionKind::Delete,
+            event: AuditEventKind::Result,
             success: true,
             error_message: None,
         }
@@ -225,6 +243,38 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(contents.trim()).unwrap();
         assert_eq!(value["success"], false);
         assert_eq!(value["error_message"], "delete-log-group denied");
+    }
+
+    // --- CodeRabbit指摘#8: intent/result二段階記録のためのevent種別のテスト ---
+
+    #[test]
+    fn intent_event_serializes_with_lowercase_snake_case_tag() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.jsonl");
+        let logger = AuditLogger::open(&path).unwrap();
+        let mut intent = entry();
+        intent.event = AuditEventKind::Intent;
+        intent.success = false;
+        intent.error_message = None;
+
+        logger.append(&intent).unwrap();
+
+        let contents = std::fs::read_to_string(&path).unwrap();
+        let value: serde_json::Value = serde_json::from_str(contents.trim()).unwrap();
+        assert_eq!(value["event"], "intent");
+    }
+
+    #[test]
+    fn result_event_serializes_with_lowercase_snake_case_tag() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.jsonl");
+        let logger = AuditLogger::open(&path).unwrap();
+
+        logger.append(&entry()).unwrap();
+
+        let contents = std::fs::read_to_string(&path).unwrap();
+        let value: serde_json::Value = serde_json::from_str(contents.trim()).unwrap();
+        assert_eq!(value["event"], "result");
     }
 
     // R-01: 以下のフェイク書き込み先群における`flush()`実装は、`std::io::Write`トレイトの

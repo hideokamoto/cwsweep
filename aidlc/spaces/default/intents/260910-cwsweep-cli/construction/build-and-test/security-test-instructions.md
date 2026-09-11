@@ -4,8 +4,9 @@ Standard戦略ではセキュリティテストファイルの生成は必須で
 
 ## 実行コマンド（静的検査）
 
+リポジトリルート（`Cargo.toml`が存在するディレクトリ）で実行する。
+
 ```bash
-cd /home/user/cwsweep
 # unsafeコード禁止の確認（コンパイル時に#![forbid(unsafe_code)]で強制されるため、grep は補助確認）
 grep -n "forbid(unsafe_code)" src/main.rs src/lib.rs
 

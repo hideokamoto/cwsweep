@@ -87,6 +87,14 @@ pub struct ExecutionApiError {
     pub message: String,
 }
 
+/// retentionInDaysがCloudWatch Logsの許容する離散値のいずれでもない場合のエラー
+/// (`put-retention-policy`は決まった離散値のみを受け付ける)。
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[error("invalid retention days: {days} is not one of the values CloudWatch Logs accepts")]
+pub struct InvalidRetentionDaysError {
+    pub days: i32,
+}
+
 /// `ExecutionEngine` 全体のエラー。
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ExecutionError {

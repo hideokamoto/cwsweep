@@ -88,7 +88,7 @@ mod tests {
             account_id: EXPECTED_ACCOUNT_ID.to_string(),
             access_key_id: "AKIAFIXTURE".to_string(),
             secret_access_key: SecretString::from("fixture-secret".to_string()),
-            session_token: SecretString::from("fixture-token".to_string()),
+            session_token: Some(SecretString::from("fixture-token".to_string())),
             expiration: None,
         }
     }

@@ -51,7 +51,7 @@
 | NFR3.4 | scalability-requirements.md | v1は逐次実行（将来の並行化余地を残す設計） | 実装は逐次実行のみ。並行化は将来の拡張であり本v1の検証対象外 | コードレビュー（scanner.rsの逐次awaitチェーン） | 対象外（設計判断） | N/A |
 | NFR4.1 | reliability-requirements.md | 可用性SLA/SLOは設定しない | 常駐サービスでないため対象外（要件自体がN/A） | reliability-requirements.md | 対象外（設計判断） | N/A |
 | NFR4.2 | reliability-requirements.md | 部分障害時、当該アカウントのみ失敗として継続 | `scanner::tests::pagination_error_mid_stream_discards_partial_results_and_fails`等で検証 | `cargo test --lib scanner::` | build-and-test | Met |
-| NFR4.3 | reliability-requirements.md | 監査ログ書き込み失敗時は操作を中断 | `audit_log_write_failure_is_reported_as_error_not_silently_ignored`で検証 | `cargo test --test audit_log_format` | build-and-test | Met |
+| NFR4.3 | reliability-requirements.md | 監査ログ書き込み失敗時は操作を中断 | `execution::tests::audit_log_write_failure_aborts_the_operation`等（`ExecutionEngine`経由で監査ログ書き込み失敗が呼び出し元へ伝播し操作を中断することを検証。`audit_log_write_failure_is_reported_as_error_not_silently_ignored`は`AuditLogger::open`単体の失敗のみを検証しており`ExecutionEngine`は実行しないため、NFR4.3の根拠として直接該当するのは前者） | `cargo test --lib execution::` | build-and-test | Met |
 | NFR4.4 | reliability-requirements.md | バックアップ/リカバリは対象外 | 要件自体が対象外と明記 | reliability-requirements.md | 対象外（設計判断） | N/A |
 | NFR5.1 | observability-requirements.md | JSON Linesの監査ログ必須出力 | `audit_log_is_valid_json_lines_with_all_mandated_fields`で必須フィールドを検証 | `cargo test --test audit_log_format` | build-and-test | Met |
 | NFR5.2 | observability-requirements.md | 標準エラー出力への進捗・エラー表示 | `tracing`/`tracing-subscriber`による実装をコードレビューで確認（自動テストなし、人間可読出力のため） | コードレビュー（main.rs, cli.rs） | build-and-test | Met（設計確認） |
