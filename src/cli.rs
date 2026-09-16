@@ -29,7 +29,7 @@ use crate::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem};
 )]
 pub struct Cli {
     /// 対象リージョン（必須・複数指定可、カンマ区切りまたは複数回指定）。
-    /// 自動列挙フォールバックは存在しない。
+    /// 自動列挙フォールバックは存在しない。重複したリージョンは初出の位置を保って除去される。
     #[arg(long, required = true, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
@@ -54,12 +54,26 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// プロセスのコマンドライン引数をパースする（`clap::Parser::parse`相当）。
+    pub fn parse_args() -> Self {
+        let mut cli = <Self as Parser>::parse();
+        cli.dedup_regions();
+        cli
+    }
+
     pub fn parse_from_args<I, T>(args: I) -> Result<Self, clap::Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
-        Self::try_parse_from(args)
+        let mut cli = Self::try_parse_from(args)?;
+        cli.dedup_regions();
+        Ok(cli)
+    }
+
+    fn dedup_regions(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.regions.retain(|r| seen.insert(r.clone()));
     }
 }
 
@@ -302,6 +316,19 @@ mod tests {
     fn regions_flag_accepts_comma_separated_values() {
         let cli = Cli::parse_from_args(["cwsweep", "--regions", "us-east-1,us-west-2"]).unwrap();
         assert_eq!(cli.regions, vec!["us-east-1", "us-west-2"]);
+    }
+
+    #[test]
+    fn regions_flag_dedupes_repeated_values_preserving_first_occurrence_order() {
+        let cli = Cli::parse_from_args([
+            "cwsweep",
+            "--regions",
+            "us-west-2,us-east-1,us-west-2",
+            "--regions",
+            "us-east-1",
+        ])
+        .unwrap();
+        assert_eq!(cli.regions, vec!["us-west-2", "us-east-1"]);
     }
 
     #[test]
