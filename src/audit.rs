@@ -6,6 +6,7 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -60,10 +61,17 @@ impl SyncWrite for File {
     }
 }
 
+/// 監査ログの書き込み先。ファイルは最初の`append`で初めて作成する（スキャンのみ・
+/// 選択なしで終了した実行が空ファイルを残さないようにするため）。
+enum AuditSink {
+    Pending(PathBuf),
+    Open(Box<dyn SyncWrite>),
+}
+
 /// JSON Linesを1エントリずつ`fsync`付きで追記する監査ログ書き込みコンポーネント。
 /// 無効化するオプションは意図的に存在しない。
 pub struct AuditLogger {
-    file: Mutex<Box<dyn SyncWrite>>,
+    file: Mutex<AuditSink>,
 }
 
 impl AuditWrite for AuditLogger {
@@ -73,7 +81,42 @@ impl AuditWrite for AuditLogger {
 }
 
 impl AuditLogger {
-    pub fn open(path: &std::path::Path) -> Result<Self, AuditWriteError> {
+    /// 出力先を検証し、ロガーを作成する。ファイル自体はまだ作成せず、最初の`append`で
+    /// 作成する。親ディレクトリが存在しない等、明らかに書き込めない場合はここで失敗する。
+    pub fn open(path: &Path) -> Result<Self, AuditWriteError> {
+        let parent = match path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        if !parent.is_dir() {
+            return Err(AuditWriteError {
+                message: format!(
+                    "failed to open audit log file {}: parent directory {} does not exist",
+                    path.display(),
+                    parent.display()
+                ),
+            });
+        }
+        if path.exists() && !path.is_file() {
+            return Err(AuditWriteError {
+                message: format!(
+                    "failed to open audit log file {}: not a regular file",
+                    path.display()
+                ),
+            });
+        }
+        Ok(Self {
+            file: Mutex::new(AuditSink::Pending(path.to_path_buf())),
+        })
+    }
+
+    fn from_writer(writer: Box<dyn SyncWrite>) -> Self {
+        Self {
+            file: Mutex::new(AuditSink::Open(writer)),
+        }
+    }
+
+    fn open_file(path: &Path) -> Result<Box<dyn SyncWrite>, AuditWriteError> {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -81,13 +124,7 @@ impl AuditLogger {
             .map_err(|e| AuditWriteError {
                 message: format!("failed to open audit log file {}: {e}", path.display()),
             })?;
-        Ok(Self::from_writer(Box::new(file)))
-    }
-
-    fn from_writer(writer: Box<dyn SyncWrite>) -> Self {
-        Self {
-            file: Mutex::new(writer),
-        }
+        Ok(Box::new(file))
     }
 
     /// 1エントリを追記し、`fsync`（`sync_data`）まで完了させる。
@@ -105,9 +142,18 @@ impl AuditLogger {
             message: format!("failed to serialize audit entry: {e}"),
         })?;
 
-        let mut file = self.file.lock().map_err(|_| AuditWriteError {
+        let mut sink = self.file.lock().map_err(|_| AuditWriteError {
             message: "audit log file mutex poisoned".to_string(),
         })?;
+
+        if let AuditSink::Pending(path) = &*sink {
+            *sink = AuditSink::Open(Self::open_file(path)?);
+        }
+        let AuditSink::Open(file) = &mut *sink else {
+            return Err(AuditWriteError {
+                message: "audit log sink is not open".to_string(),
+            });
+        };
 
         file.write_all(line.as_bytes())
             .map_err(|e| AuditWriteError {
@@ -195,6 +241,27 @@ mod tests {
         let bogus_path = std::path::Path::new("/nonexistent-dir-for-cwsweep-tests/audit.jsonl");
 
         let result = AuditLogger::open(bogus_path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_does_not_create_file_until_first_append() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.jsonl");
+
+        let logger = AuditLogger::open(&path).unwrap();
+        assert!(!path.exists());
+
+        logger.append(&entry()).unwrap();
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn open_fails_when_path_is_a_directory() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let result = AuditLogger::open(dir.path());
 
         assert!(result.is_err());
     }
