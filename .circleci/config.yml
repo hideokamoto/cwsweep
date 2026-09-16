@@ -1,5 +1,13 @@
 version: 2.1
 
+# `run-weekly-security` はCircleCI Scheduled Pipeline（Project Settings/API側で
+# 週次cronトリガーを設定し、このパラメータをtrueで渡す）専用のスイッチ。
+# 通常のpush/PR起点のパイプラインでは既定のfalseのまま。
+parameters:
+  run-weekly-security:
+    type: boolean
+    default: false
+
 orbs:
   rust: circleci/rust@1.6.0
 
@@ -95,6 +103,12 @@ jobs:
 
   deny:
     executor: rust-executor
+    # `advisories`はRustSec脆弱性DBを見るため`audit`と同じ理由（DB更新に伴う非決定性・
+    # 通常CIをブロックしたくない）で既定から外す。週次ワークフローでのみ`advisories`も含めて実行する。
+    parameters:
+      checks:
+        type: string
+        default: "bans licenses sources"
     steps:
       - checkout
       - run:
@@ -104,8 +118,8 @@ jobs:
               cargo install cargo-deny --locked
             fi
       - run:
-          name: "cargo deny check (advisories/licenses/bans/sources, NFR2.7)"
-          command: cargo deny check
+          name: "cargo deny check <<parameters.checks>> (NFR2.7)"
+          command: cargo deny check <<parameters.checks>>
 
   # タグ駆動リリース（team.md: v0.1.0 等のタグpushでクロスプラットフォーム
   # （Linux/macOS、x86_64/arm64）のリリースバイナリをビルドし GitHub Releases に添付する。
@@ -187,13 +201,25 @@ jobs:
 
 workflows:
   build-and-test:
+    unless: << pipeline.parameters.run-weekly-security >>
     jobs:
       - fmt
       - clippy
       - test
       - coverage
-      - audit
       - deny
+
+  # NFR2.6/2.7: 既知脆弱性チェック（cargo audit / cargo deny advisories）はRustSec DBの
+  # 更新に依存し非決定的なため、通常のpush/PR CIをブロックせず週次で実行する。
+  # トリガーはCircleCI Project Settings（またはAPI）のScheduled Pipelineで
+  # `run-weekly-security: true` パラメータを渡して設定する（config.yml側の設定は不要）。
+  weekly-security:
+    when: << pipeline.parameters.run-weekly-security >>
+    jobs:
+      - audit
+      - deny:
+          name: deny-advisories
+          checks: "advisories"
 
   release:
     jobs:
