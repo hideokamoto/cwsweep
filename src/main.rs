@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::io::IsTerminal;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -476,6 +477,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if aggregator.is_empty() {
         println!("削除対象のロググループはありません。");
+        return Ok(());
+    }
+
+    if cli.scan_only {
+        return Ok(());
+    }
+    if !std::io::stdin().is_terminal() {
+        tracing::info!("stdin is not a TTY; skipping interactive selection (same as --scan-only)");
         return Ok(());
     }
 

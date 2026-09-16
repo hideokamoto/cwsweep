@@ -46,6 +46,12 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub execute: bool,
 
+    /// スキャン結果を出力して終了する（対話式の選択・確認へ進まない）。
+    /// `--output json`と組み合わせてagent/CIから利用する用途向け。標準入力がTTYで
+    /// ない場合はこのフラグを指定しなくても同じ挙動になる。
+    #[arg(long, default_value_t = false, conflicts_with = "execute")]
+    pub scan_only: bool,
+
     /// 監査ログ（JSON Lines）の出力先パス。既定値は後方互換のため現行のカレント
     /// ディレクトリ直下`cwsweep-audit.jsonl`を維持する。無効化するオプションは
     /// 存在しない（project.md Mandated: 監査ログ出力に無効化オプションを設けない）。
@@ -314,6 +320,31 @@ mod tests {
     fn execute_flag_is_true_only_when_explicitly_supplied() {
         let cli = Cli::parse_from_args(["cwsweep", "--regions", "us-east-1", "--execute"]).unwrap();
         assert!(cli.execute);
+    }
+
+    #[test]
+    fn scan_only_flag_defaults_to_false() {
+        let cli = Cli::parse_from_args(["cwsweep", "--regions", "us-east-1"]).unwrap();
+        assert!(!cli.scan_only);
+    }
+
+    #[test]
+    fn scan_only_flag_can_be_supplied() {
+        let cli =
+            Cli::parse_from_args(["cwsweep", "--regions", "us-east-1", "--scan-only"]).unwrap();
+        assert!(cli.scan_only);
+    }
+
+    #[test]
+    fn scan_only_conflicts_with_execute() {
+        let result = Cli::parse_from_args([
+            "cwsweep",
+            "--regions",
+            "us-east-1",
+            "--scan-only",
+            "--execute",
+        ]);
+        assert!(result.is_err());
     }
 
     #[test]
