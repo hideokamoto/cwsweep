@@ -23,7 +23,7 @@ use cwsweep::cli::{Cli, CliApp};
 use cwsweep::confirmation::{ConfirmPrompt, ConfirmationPresenter, ConfirmationSummary};
 use cwsweep::credentials::{AccountCredentials, AssumeRoleOperations, CredentialProvider};
 use cwsweep::error::{AssumeRoleError, CallerIdentityCallError, OrgDiscoveryError};
-use cwsweep::execution::ActionApiOperations;
+use cwsweep::execution::{ActionApiOperations, ExecutionOutcome};
 use cwsweep::identity::{CallerIdentityOperations, IdentityCheck, IdentityVerifier};
 use cwsweep::org_discovery::{AccountInfo, AccountStatus, ListAccountsOperations, OrgDiscovery};
 use cwsweep::planner::ActionKind;
@@ -299,10 +299,44 @@ impl MultiSelectPrompt for InquireMultiSelectPrompt {
 }
 
 /// `inquire`ベースの実最終確認プロンプト実装。
-struct InquireConfirmPrompt;
+struct InquireConfirmPrompt {
+    execute: bool,
+}
+
+fn execution_mode_label(execute: bool) -> &'static str {
+    if execute {
+        "EXECUTE（実際にAWS APIを呼び出します）"
+    } else {
+        "DRY-RUN（--execute未指定のため、AWS APIは呼び出しません）"
+    }
+}
+
+fn confirm_question(execute: bool) -> &'static str {
+    if execute {
+        "上記の内容で実行してよろしいですか？"
+    } else {
+        "上記の内容でdry-runを続行しますか？（実際の変更は行われません）"
+    }
+}
+
+fn format_outcome_line(outcome: &ExecutionOutcome) -> String {
+    let target = format!(
+        "{}/{}/{}",
+        outcome.action.account_id, outcome.action.region, outcome.action.log_group_name
+    );
+    if outcome.dry_run {
+        return format!("{target}: skipped (dry-run: --execute not supplied)");
+    }
+    match (&outcome.success, &outcome.error_message) {
+        (true, _) => format!("{target}: success"),
+        (false, Some(msg)) => format!("{target}: failed: {msg}"),
+        (false, None) => format!("{target}: failed"),
+    }
+}
 
 impl ConfirmPrompt for InquireConfirmPrompt {
     fn confirm(&self, summary: &ConfirmationSummary) -> bool {
+        println!("実行モード: {}", execution_mode_label(self.execute));
         println!("対象アカウントID: {:?}", summary.account_ids);
         println!("対象リージョン: {:?}", summary.regions);
         println!("対象ログループ: {:?}", summary.log_group_names);
@@ -324,7 +358,7 @@ impl ConfirmPrompt for InquireConfirmPrompt {
                 target.account_id, target.region, target.log_group_name, action_label
             );
         }
-        inquire::Confirm::new("上記の内容で実行してよろしいですか？")
+        inquire::Confirm::new(confirm_question(self.execute))
             .with_default(false)
             .prompt()
             .unwrap_or(false)
@@ -490,7 +524,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let planned = CliApp::plan(&selected, action_kind)?;
     let total_bytes: i64 = selected.iter().map(|r| r.stored_bytes).sum();
 
-    let presenter = ConfirmationPresenter::new(InquireConfirmPrompt);
+    let presenter = ConfirmationPresenter::new(InquireConfirmPrompt {
+        execute: cli.execute,
+    });
     let confirmed = CliApp::confirm(&presenter, &planned, total_bytes);
     let Some(confirmed_actions) = confirmed else {
         println!("確認が得られなかったため、処理を中止します。");
@@ -498,15 +534,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let outcomes = app.execute(&confirmed_actions, cli.execute).await?;
-    for outcome in outcomes {
-        println!(
-            "{}/{}/{}: success={} {}",
-            outcome.action.account_id,
-            outcome.action.region,
-            outcome.action.log_group_name,
-            outcome.success,
-            outcome.error_message.unwrap_or_default()
-        );
+    for outcome in &outcomes {
+        println!("{}", format_outcome_line(outcome));
     }
 
     Ok(())
@@ -515,6 +544,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn outcome(success: bool, error_message: Option<&str>, dry_run: bool) -> ExecutionOutcome {
+        ExecutionOutcome {
+            action: cwsweep::planner::PlannedAction {
+                account_id: "111111111111".to_string(),
+                region: "us-east-1".to_string(),
+                log_group_name: "/a".to_string(),
+                action_kind: ActionKind::Delete,
+                confirmed: true,
+            },
+            success,
+            error_message: error_message.map(str::to_string),
+            dry_run,
+        }
+    }
+
+    #[test]
+    fn outcome_line_marks_dry_run_as_skipped_not_failed() {
+        let line = format_outcome_line(&outcome(
+            false,
+            Some("dry-run: --execute not supplied"),
+            true,
+        ));
+        assert_eq!(
+            line,
+            "111111111111/us-east-1//a: skipped (dry-run: --execute not supplied)"
+        );
+        assert!(!line.contains("success=false"));
+    }
+
+    #[test]
+    fn outcome_line_reports_success_and_failure_distinctly() {
+        assert_eq!(
+            format_outcome_line(&outcome(true, None, false)),
+            "111111111111/us-east-1//a: success"
+        );
+        assert_eq!(
+            format_outcome_line(&outcome(false, Some("boom"), false)),
+            "111111111111/us-east-1//a: failed: boom"
+        );
+    }
+
+    #[test]
+    fn confirmation_texts_distinguish_dry_run_from_execute() {
+        assert!(execution_mode_label(false).contains("DRY-RUN"));
+        assert!(execution_mode_label(true).contains("EXECUTE"));
+        assert!(confirm_question(false).contains("dry-run"));
+        assert!(!confirm_question(true).contains("dry-run"));
+    }
 
     fn creds_with_session_token(session_token: Option<&str>) -> AccountCredentials {
         AccountCredentials {

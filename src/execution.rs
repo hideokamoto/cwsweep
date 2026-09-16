@@ -42,6 +42,9 @@ pub struct ExecutionOutcome {
     pub action: PlannedAction,
     pub success: bool,
     pub error_message: Option<String>,
+    /// `--execute`未指定のためAPIを呼び出さなかった場合に`true`。
+    /// このとき`success`は常に`false`だが、失敗ではなく「未実行」を意味する。
+    pub dry_run: bool,
 }
 
 /// dry-run既定、`--execute`時のみ書き込みAPIを呼び出す実行エンジン。
@@ -101,6 +104,7 @@ impl ExecutionEngine {
                     action,
                     success: false,
                     error_message: Some("dry-run: --execute not supplied".to_string()),
+                    dry_run: true,
                 })
                 .collect());
         }
@@ -116,6 +120,7 @@ impl ExecutionEngine {
                         action: action.clone(),
                         success: false,
                         error_message: Some("no credentials resolved for account".to_string()),
+                        dry_run: false,
                     });
                     continue;
                 }
@@ -184,6 +189,7 @@ impl ExecutionEngine {
                 action: action.clone(),
                 success,
                 error_message,
+                dry_run: false,
             });
         }
 
@@ -318,6 +324,7 @@ mod tests {
         assert_eq!(identity.calls.load(Ordering::SeqCst), 0);
         assert_eq!(outcomes.len(), 2);
         assert!(outcomes.iter().all(|o| !o.success));
+        assert!(outcomes.iter().all(|o| o.dry_run));
     }
 
     #[tokio::test]
@@ -337,6 +344,7 @@ mod tests {
 
         assert_eq!(api.delete_calls.load(Ordering::SeqCst), 1);
         assert!(outcomes[0].success);
+        assert!(!outcomes[0].dry_run);
     }
 
     #[tokio::test]
