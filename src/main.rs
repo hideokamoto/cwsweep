@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::io::IsTerminal;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -363,6 +364,7 @@ fn action_kind_from_prompt() -> Result<ActionKind, String> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
         .init();
 
     let cli = Cli::parse();
