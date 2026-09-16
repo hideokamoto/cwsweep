@@ -73,6 +73,7 @@ mod tests {
         async fn list_all_accounts(&self) -> Result<Vec<AccountInfo>, OrgDiscoveryError> {
             Err(OrgDiscoveryError {
                 message: "access denied".to_string(),
+                not_in_organization: false,
             })
         }
     }
@@ -122,6 +123,26 @@ mod tests {
         let result = discovery.list_active_accounts().await;
 
         assert!(result.is_err());
+    }
+
+    struct NotInOrganizationClient;
+    #[async_trait]
+    impl ListAccountsOperations for NotInOrganizationClient {
+        async fn list_all_accounts(&self) -> Result<Vec<AccountInfo>, OrgDiscoveryError> {
+            Err(OrgDiscoveryError {
+                message: "account isn't a member of an organization".to_string(),
+                not_in_organization: true,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn propagates_not_in_organization_flag_so_caller_can_fall_back() {
+        let discovery = OrgDiscovery::new(NotInOrganizationClient);
+
+        let err = discovery.list_active_accounts().await.unwrap_err();
+
+        assert!(err.not_in_organization);
     }
 
     #[tokio::test]

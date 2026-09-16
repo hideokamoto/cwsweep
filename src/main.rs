@@ -157,8 +157,15 @@ impl ListAccountsOperations for OrganizationsListAccountsAdapter {
             if let Some(token) = &next_token {
                 request = request.next_token(token.clone());
             }
-            let output = request.send().await.map_err(|e| OrgDiscoveryError {
-                message: e.to_string(),
+            let output = request.send().await.map_err(|e| {
+                let not_in_organization = e
+                    .as_service_error()
+                    .map(|se| se.is_aws_organizations_not_in_use_exception())
+                    .unwrap_or(false);
+                OrgDiscoveryError {
+                    message: e.to_string(),
+                    not_in_organization,
+                }
             })?;
 
             for account in output.accounts() {
@@ -324,6 +331,18 @@ impl ConfirmPrompt for InquireConfirmPrompt {
     }
 }
 
+/// Organizationのメンバーではないアカウントに対する単一アカウントモードの
+/// フォールバック対象を組み立てる。呼び出し元アカウント自身のみを対象とし、
+/// `AccountStatus::Active`として扱う（AssumeRoleは行わず、`CredentialProvider`が
+/// 管理アカウント自身の現行クレデンシャルをそのまま用いる）。
+fn single_account_fallback(management_account_id: &str) -> Vec<AccountInfo> {
+    vec![AccountInfo {
+        account_id: management_account_id.to_string(),
+        account_name: String::new(),
+        status: AccountStatus::Active,
+    }]
+}
+
 fn action_kind_from_prompt() -> Result<ActionKind, String> {
     let options = vec!["delete", "set-retention"];
     let choice = inquire::Select::new("実行するアクションを選択してください:", options)
@@ -394,7 +413,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let org_discovery = OrgDiscovery::new(OrganizationsListAccountsAdapter {
         client: organizations_client,
     });
-    let accounts = org_discovery.list_active_accounts().await?;
+    // R-05: 呼び出し元アカウントがAWS Organizationのメンバーではない場合
+    // （`AwsOrganizationsNotInUseException`）、Organization横断の前提が成立しないだけで
+    // 単独アカウントに対する棚卸し・削除自体は成立するため、呼び出し元アカウント単体を
+    // 対象とする単一アカウントモードにフォールバックする。それ以外の失敗
+    // （権限不足等）は従来どおり致命的エラーとして扱う。
+    let accounts = match org_discovery.list_active_accounts().await {
+        Ok(accounts) => accounts,
+        Err(err) if err.not_in_organization => {
+            eprintln!(
+                "このアカウント（{management_account_id}）はAWS Organizationのメンバーではないため、単一アカウントモードで実行します。"
+            );
+            single_account_fallback(&management_account_id)
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     // R-04: 監査ログ出力先は`--audit-log-path`で上書き可能（既定値は後方互換のため
     // カレントディレクトリ直下`cwsweep-audit.jsonl`を維持）。無効化オプションは
@@ -513,5 +546,17 @@ mod tests {
         let sdk_creds = to_sdk_credentials(&creds);
 
         assert_eq!(sdk_creds.session_token(), Some("a-session-token"));
+    }
+
+    // 単一アカウントモードのフォールバック（AwsOrganizationsNotInUseExceptionを検知した際に
+    // Organization APIを介さず呼び出し元アカウント自身のみを対象とする）のテスト。
+
+    #[test]
+    fn single_account_fallback_targets_only_the_calling_account() {
+        let accounts = single_account_fallback("111111111111");
+
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].account_id, "111111111111");
+        assert_eq!(accounts[0].status, AccountStatus::Active);
     }
 }
