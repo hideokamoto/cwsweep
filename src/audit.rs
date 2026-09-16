@@ -110,6 +110,7 @@ impl AuditLogger {
         })
     }
 
+    #[cfg(test)]
     fn from_writer(writer: Box<dyn SyncWrite>) -> Self {
         Self {
             file: Mutex::new(AuditSink::Open(writer)),
