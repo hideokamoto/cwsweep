@@ -60,10 +60,16 @@ pub struct PaginationError {
 }
 
 /// Organizationsアカウント列挙の失敗。
+///
+/// `not_in_organization` は、呼び出し元アカウントがAWS Organizationのメンバーではない
+/// ために失敗したこと（`AwsOrganizationsNotInUseException`）を示す。このケースは
+/// 権限不足等の他の失敗と異なり、単一アカウントモードへのフォールバックが可能な
+/// ケースとして呼び出し元が区別できる必要がある。
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("organizations list-accounts failed: {message}")]
 pub struct OrgDiscoveryError {
     pub message: String,
+    pub not_in_organization: bool,
 }
 
 /// スキャン層全体のエラー。
