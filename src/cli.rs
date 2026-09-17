@@ -255,6 +255,7 @@ impl CliApp {
                             "credentials unavailable for account {}: {e}",
                             action.account_id
                         )),
+                        dry_run: false,
                     });
                 }
                 None => {
@@ -268,6 +269,7 @@ impl CliApp {
                             "credentials unavailable for account {}: not resolved",
                             action.account_id
                         )),
+                        dry_run: false,
                     });
                 }
             }
