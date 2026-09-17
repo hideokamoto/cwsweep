@@ -7,7 +7,7 @@
 - **Scope**: classic
 - **Start Date**: 2026-09-17T01:32:42Z
 - **State Version**: 8
-- **Active Agent**: aidlc-design-agent
+- **Active Agent**: aidlc-architect-agent
 - **Worktree Path**:
 - **Bolt Refs**:
 - **Practices Affirmed Timestamp**: 2026-09-17T12:57:23Z
@@ -29,7 +29,7 @@
 ## Execution Plan Summary
 - **Total Stages**: 26
 - **Completed**: 6
-- **In Progress**: refined-mockups
+- **In Progress**: domain-design
 
 ## Runtime State
 - **Revision Count**: 0
@@ -65,8 +65,8 @@
 - [x] practices-discovery — EXECUTE
 - [x] requirements-analysis — EXECUTE
 - [S] user-stories — EXECUTE
-- [-] refined-mockups — EXECUTE
-- [ ] domain-design — EXECUTE
+- [S] refined-mockups — EXECUTE
+- [-] domain-design — EXECUTE
 - [ ] units-generation — EXECUTE
 - [ ] contract-design — EXECUTE
 - [ ] delivery-planning — EXECUTE
@@ -92,12 +92,12 @@ Per unit: [TBD]
 
 ## Current Status
 - **Lifecycle Phase**: INCEPTION
-- **Current Stage**: refined-mockups
-- **Next Stage**: domain-design
+- **Current Stage**: domain-design
+- **Next Stage**: units-generation
 - **Status**: Running
-- **Last Updated**: 2026-09-17T22:46:09Z
+- **Last Updated**: 2026-09-17T22:46:37Z
 
 ## Session Resume Point
 - **Last Completed Stage**: requirements-analysis
-- **Next Action**: Execute Refined Mockups
+- **Next Action**: Execute Domain Design
 - **Pending Artifacts**: none
