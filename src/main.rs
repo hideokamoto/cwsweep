@@ -79,6 +79,21 @@ fn sts_client_for(creds: &AccountCredentials) -> aws_sdk_sts::Client {
     aws_sdk_sts::Client::from_conf(config)
 }
 
+/// AWS SDKエラーをソースチェーン込みの1行文字列にする。`to_string()`では
+/// "service error" / "dispatch failure" 等の最上位分類しか得られず原因が分からない。
+fn sdk_error_message(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut parts = vec![e.to_string()];
+    let mut source = e.source();
+    while let Some(s) = source {
+        let text = s.to_string();
+        if parts.last() != Some(&text) {
+            parts.push(text);
+        }
+        source = s.source();
+    }
+    parts.join(": ")
+}
+
 /// OrganizationsもSTSと同様のグローバルサービスであり、`--regions`や環境の既定
 /// リージョンとは独立に`us-east-1`へ固定する。
 fn organizations_client_for(creds: &AccountCredentials) -> aws_sdk_organizations::Client {
@@ -116,7 +131,7 @@ impl AssumeRoleOperations for StsAssumeRoleAdapter {
             .map_err(|e| AssumeRoleError {
                 account_id: account_id.to_string(),
                 role_name: role_arn.to_string(),
-                message: e.to_string(),
+                message: sdk_error_message(&e),
             })?;
 
         let creds = output.credentials.ok_or_else(|| AssumeRoleError {
@@ -152,7 +167,7 @@ impl CallerIdentityOperations for StsCallerIdentityAdapter {
                 .send()
                 .await
                 .map_err(|e| CallerIdentityCallError {
-                    message: e.to_string(),
+                    message: sdk_error_message(&e),
                 })?;
         output.account.ok_or_else(|| CallerIdentityCallError {
             message: "get-caller-identity response contained no account id".to_string(),
@@ -181,7 +196,7 @@ impl ListAccountsOperations for OrganizationsListAccountsAdapter {
                     .map(|se| se.is_aws_organizations_not_in_use_exception())
                     .unwrap_or(false);
                 OrgDiscoveryError {
-                    message: e.to_string(),
+                    message: sdk_error_message(&e),
                     not_in_organization,
                 }
             })?;
@@ -235,7 +250,7 @@ impl DescribeLogGroupsOperations for CloudWatchLogsAdapter {
         if let Some(token) = next_token {
             request = request.next_token(token);
         }
-        let output = request.send().await.map_err(|e| e.to_string())?;
+        let output = request.send().await.map_err(|e| sdk_error_message(&e))?;
 
         let log_groups = output
             .log_groups()
@@ -269,7 +284,7 @@ impl ActionApiOperations for CloudWatchLogsAdapter {
             .send()
             .await
             .map(|_| ())
-            .map_err(|e| e.to_string())
+            .map_err(|e| sdk_error_message(&e))
     }
 
     async fn put_retention_policy(
@@ -287,7 +302,7 @@ impl ActionApiOperations for CloudWatchLogsAdapter {
             .send()
             .await
             .map(|_| ())
-            .map_err(|e| e.to_string())
+            .map_err(|e| sdk_error_message(&e))
     }
 }
 
