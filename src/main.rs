@@ -59,6 +59,10 @@ fn cwlogs_client_for(creds: &AccountCredentials, region: &str) -> aws_sdk_cloudw
     aws_sdk_cloudwatchlogs::Client::from_conf(config)
 }
 
+/// グローバルサービス（STS / Organizations）のエンドポイントリージョン。
+/// `AWS_REGION`等の環境設定に依存せず常にこのリージョンへ接続する。
+const GLOBAL_SERVICE_REGION: &str = "us-east-1";
+
 /// R-02: STSはグローバルサービスであり、`us-east-1`をエンドポイントリージョンとして
 /// 固定してもAWS標準パーティション（`aws`、商用リージョン）内であれば`--regions`に
 /// 何を指定しても正しく動作する。v1は商用パーティションのみをスコープとしており
@@ -67,11 +71,25 @@ fn cwlogs_client_for(creds: &AccountCredentials, region: &str) -> aws_sdk_cloudw
 fn sts_client_for(creds: &AccountCredentials) -> aws_sdk_sts::Client {
     let config = aws_sdk_sts::Config::builder()
         .behavior_version(BehaviorVersion::latest())
-        .region(aws_sdk_sts::config::Region::new("us-east-1".to_string()))
+        .region(aws_sdk_sts::config::Region::new(GLOBAL_SERVICE_REGION))
         .credentials_provider(to_sdk_credentials(creds))
         .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
         .build();
     aws_sdk_sts::Client::from_conf(config)
+}
+
+/// OrganizationsもSTSと同様のグローバルサービスであり、`--regions`や環境の既定
+/// リージョンとは独立に`us-east-1`へ固定する。
+fn organizations_client_for(creds: &AccountCredentials) -> aws_sdk_organizations::Client {
+    let config = aws_sdk_organizations::Config::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .region(aws_sdk_organizations::config::Region::new(
+            GLOBAL_SERVICE_REGION,
+        ))
+        .credentials_provider(to_sdk_credentials(creds))
+        .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
+        .build();
+    aws_sdk_organizations::Client::from_conf(config)
 }
 
 /// `sts:AssumeRole` の実AWS SDK実装。
@@ -367,7 +385,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse_args();
     let run_id = Uuid::new_v4().to_string();
 
+    // `base_config`はクレデンシャル解決のみに用いる。各サービスクライアントは
+    // `--regions`（CloudWatch Logs）または`GLOBAL_SERVICE_REGION`（STS / Organizations）
+    // を明示するため、ここでの既定リージョン解決（IMDS問い合わせ等）は不要。
     let base_config = aws_config::defaults(BehaviorVersion::latest())
+        .region(aws_config::Region::new(GLOBAL_SERVICE_REGION))
         .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
         .load()
         .await;
@@ -395,7 +417,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..management_credentials
     };
 
-    let sts_client = aws_sdk_sts::Client::new(&base_config);
+    let sts_client = sts_client_for(&management_credentials);
+    let organizations_client = organizations_client_for(&management_credentials);
     let assume_role_client: Arc<dyn AssumeRoleOperations> =
         Arc::new(StsAssumeRoleAdapter { client: sts_client });
     let credential_provider = Arc::new(CredentialProvider::new(
@@ -408,7 +431,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity: Arc<dyn IdentityCheck> =
         Arc::new(IdentityVerifier::new(StsCallerIdentityAdapter));
 
-    let organizations_client = aws_sdk_organizations::Client::new(&base_config);
     let org_discovery = OrgDiscovery::new(OrganizationsListAccountsAdapter {
         client: organizations_client,
     });
