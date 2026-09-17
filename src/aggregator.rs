@@ -53,7 +53,7 @@ impl ScanAggregator {
     /// サイズ（`stored_bytes`）降順にソートしたビューを返す。
     pub fn sorted_by_size_desc(&self) -> Vec<&LogGroupRecord> {
         let mut refs: Vec<&LogGroupRecord> = self.records.iter().collect();
-        refs.sort_by(|a, b| b.stored_bytes.cmp(&a.stored_bytes));
+        refs.sort_by_key(|r| std::cmp::Reverse(r.stored_bytes));
         refs
     }
 
