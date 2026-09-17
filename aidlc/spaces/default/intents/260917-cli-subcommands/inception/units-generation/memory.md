@@ -12,3 +12,4 @@
 
 ## Open questions
 <!-- example: 2026-05-29T10:14:32Z — confirm the retention window with compliance before the next stage hardens the schema -->
+- 2026-09-17T00:00:00Z — アーキテクチャレビュアー(advisory)がREADY判定を返したが、R-01(Major)として、unit-of-work.mdの「Coverage Verification」がNFR1-NFR5全件のUnit割当を主張しているにもかかわらず、NFR4（後方互換シム混入防止の固定化テスト）がどのUnitの「カバーする要件」にも明記されていない齟齬を指摘。R-02(Minor)としてFR4.3のtraceability.json上のtarget表記（U1のみ）がunit-of-work.md/story-mapのクロスカッティング記述と完全には一致しない点も指摘。いずれも承認ゲートで人間に判断を委ねる。

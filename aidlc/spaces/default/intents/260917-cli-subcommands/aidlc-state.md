@@ -32,7 +32,7 @@
 - **In Progress**: units-generation
 
 ## Runtime State
-- **Revision Count**: 0
+- **Revision Count**: 1
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -95,7 +95,7 @@ Per unit: [TBD]
 - **Current Stage**: units-generation
 - **Next Stage**: contract-design
 - **Status**: Running
-- **Last Updated**: 2026-09-17T23:02:49Z
+- **Last Updated**: 2026-09-17T23:27:51Z
 
 ## Session Resume Point
 - **Last Completed Stage**: domain-design

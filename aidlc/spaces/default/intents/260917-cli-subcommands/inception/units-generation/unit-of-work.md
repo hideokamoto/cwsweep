@@ -90,7 +90,10 @@ M — 既存12コンポーネントの呼び出し順序再編＋新設U1との�
 
 ### カバーする要件
 FR1.1, FR1.2, FR2.1, FR2.2, FR2.3, FR2.4, FR3.1, FR3.2, FR3.3, FR3.4, FR3.5, FR4.3（出力整形側）,
-FR5.1, FR5.2, FR5.3, FR5.4, FR6.1, NFR1, NFR5
+FR5.1, FR5.2, FR5.3, FR5.4, FR6.1, NFR1, NFR4, NFR5
+
+NFR4（後方互換シムを実装しないこと自体をテストで固定化）はFR6.1（旧フラグ廃止・後方互換
+エイリアスなし）と同じ経路（`Cli`/`Commands`のパース層）が対象であるため、本Unitが担う。
 
 ---
 
@@ -130,4 +133,7 @@ FR6.2, FR6.3
 ## Coverage Verification
 
 全6件のFR群（FR1-FR6）・5件のNFR群（NFR1-NFR5）が上記3 Unitのいずれかに割り当てられている
-（詳細は`traceability.json`参照）。
+（詳細は`traceability.json`参照）。NFR1・NFR4・NFR5はU2（cli-foundation）、NFR2・NFR3はU1
+（audit-reader）が担う。FR4.3はU1（AuditEntryデータ供給）とU2（OutputFormatterでの整形実装）の
+両方にまたがる横断的関心事である（`traceability.json`のスキーマは単一targetのみを許容するため
+主担当をU1として記録し、この横断性は本ファイルとunit-of-work-story-map.mdで補足する）。
