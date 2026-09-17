@@ -220,3 +220,4 @@ CI 必須ゲートとし、`Cargo.lock` をコミットして `--locked` フラ�
 
 <!-- Project-specific corrections from human feedback. -->
 <!-- Format: NEVER/ALWAYS [behavior] (learned [date]) -->
+- advisoryレビュー(review_class: advisory)はステージあたり1回のみ実施される。Request Changes後の修正を再レビューするには通常の `aidlc engine log review --iteration N+1` は受理されず、redo jump（`aidlc engine jump execute --target <stage> --direction redo`）でステージをクリーンに再入場し、Consolidated Summary Confirmationを再確認してから新規iteration 1としてレビューを再ディスパッチする必要がある。 (learned 2026-09-17) <!-- cid:260917-cli-subcommands:units-generation:c11d2f41fbd1d6fc790c51bbe76a33d21cde752c154de8f2fdac2bd30ee8cf42 -->
