@@ -6,6 +6,7 @@
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
+- 2026-09-17T00:00:00Z — advisory reviューは1回のみのため、Request Changes後の再レビューは通常のiteration+1では受理されず、redo jump（/aidlc --stage units-generation）で本ステージをクリーンに再入場する必要があった。既存4成果物はKeepで再利用し、Consolidated Summary Confirmationを再確認した上でレビューを再ディスパッチした。再レビューはREADY判定（R-01/R-02解消、R-03は非ブロッキングMinor）。
 
 ## Tradeoffs
 <!-- example: 2026-05-29T10:14:32Z — picked TDD over BDD this run; the team is unit-first and the domain is well-understood -->
