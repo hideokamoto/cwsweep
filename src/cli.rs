@@ -179,8 +179,8 @@ impl CliApp {
         selector: &InteractiveSelector<P>,
     ) -> Result<Vec<crate::aggregator::LogGroupRecord>, crate::selector::SelectorError> {
         let items: Vec<SelectableItem> = aggregator
-            .records()
-            .iter()
+            .sorted_by_size_desc()
+            .into_iter()
             .map(|r| SelectableItem {
                 label: format!("{}/{}/{}", r.account_id, r.region, r.log_group_name),
                 record: r.clone(),
@@ -605,6 +605,29 @@ mod tests {
         let selected = CliApp::select(&aggregator, &selector).unwrap();
 
         assert_eq!(selected.len(), 1);
+    }
+
+    #[test]
+    fn select_presents_items_in_stored_bytes_desc_order_matching_table() {
+        let mut aggregator = ScanAggregator::new();
+        aggregator.add_all(
+            [("/small", 1), ("/large", 300), ("/medium", 20)]
+                .into_iter()
+                .map(|(name, bytes)| crate::aggregator::LogGroupRecord {
+                    account_id: MANAGEMENT_ACCOUNT_ID.to_string(),
+                    region: REGION.to_string(),
+                    log_group_name: name.to_string(),
+                    stored_bytes: bytes,
+                    retention_in_days: None,
+                })
+                .collect(),
+        );
+        let selector = InteractiveSelector::new(FixedSelectAll);
+
+        let selected = CliApp::select(&aggregator, &selector).unwrap();
+
+        let names: Vec<&str> = selected.iter().map(|r| r.log_group_name.as_str()).collect();
+        assert_eq!(names, vec!["/large", "/medium", "/small"]);
     }
 
     #[test]
