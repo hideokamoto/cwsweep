@@ -36,6 +36,7 @@ cwsweep --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
   成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。
   `--audit-log-path` で出力先を上書き可能）にJSON Linesで必ず記録する
   （無効化オプションなし）。監査ログの書き込みに失敗した場合、当該操作は中断される。
+  ファイルは最初の記録時に作成されるため、スキャンのみで終了した場合は作成されない。
 - 管理アカウント自身へはAssumeRoleせず現在の認証情報をそのまま使用し、メンバーアカウントに
   対してのみAssumeRoleする。
 - いずれかのAWSアカウントへのAPI呼び出しの直前（スキャン時、および削除・retention変更の実行
