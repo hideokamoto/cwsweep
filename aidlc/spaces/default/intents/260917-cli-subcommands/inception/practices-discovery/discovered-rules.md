@@ -1,9 +1,10 @@
-# Discovered Rules — draft（再確認: 260917-cli-subcommands）
+# Discovered Rules — 最終版（260917-cli-subcommands）
 
 > `260910-cwsweep-cli` で affirm 済みの `project.md` の `## Mandated` /
-> `## Forbidden` を継承する。本 intent（CLI のサブコマンド化）はこれらの
-> ハードな制約に抵触する変更を含まないため、既存項目はすべてそのまま維持する。
-> 本 intent 固有の追加項目は末尾にマークして記載する。
+> `## Forbidden` を UNCHANGED のまま継承する。本 intent（CLI のサブコマンド化）は
+> これらのハードな制約に抵触する変更を含まないため、既存項目はすべてそのまま維持する。
+> 本 intent の人間インタビュー（Q4）で唯一新規に project.md への昇格が確定した
+> 1 件の Forbidden のみを末尾に追記する。
 
 ## Mandated
 
@@ -26,15 +27,10 @@
   マージをブロックする。あわせて `cargo deny check`（advisories / licenses / bans / sources）を
   CI 必須ゲートとし、`Cargo.lock` をコミットして `--locked` フラグでビルド・テストする。
 
-### 本 intent での追加候補（Mandated）
-
-- ALWAYS（追加候補）: サブコマンド化後も、上記の Identity 二重検証・監査ログ必須・dry-run既定・
-  確認画面再掲の各制約は、実行系操作を担う `clean` サブコマンドの経路として維持される。これは
-  既存 Mandated の適用対象をサブコマンド構造に読み替えるものであり、内容自体の変更ではない。
-- ALWAYS（追加候補・要確認）: `audit` 閲覧サブコマンドは既存の監査ログ（JSON Lines）を読み取り専用で
-  参照する経路とし、監査ログファイルへの書き込み・変更・削除は一切行わない。この制約が
-  ハードな Forbidden/Mandated として project.md に昇格すべきか、それとも通常の設計方針
-  （team.md 相当）に留めるべきかは人間インタビューで確認する。
+（本 intent での確認結果：サブコマンド化後も、上記の Identity 二重検証・監査ログ必須・dry-run既定・
+確認画面再掲の各制約は、実行系操作を担う `clean` サブコマンドの経路に読み替えて維持される。これは
+既存 Mandated の適用対象をサブコマンド構造に読み替えるものであり、内容自体の変更ではない。新規
+昇格ではないため、上記リストへの追記は行わない。）
 
 ## Forbidden
 
@@ -53,14 +49,23 @@
 - NEVER: `unwrap()` / `expect()` / `panic!` を本番コードパス（AWS API呼び出し・Identity検証・
   削除実行のパス）で使用しない。エラーは常に `Result` で呼び出し元に伝播させる
   （テストコードは対象外）。
+- NEVER: `audit`（監査ログ閲覧）サブコマンドのハンドラに、`delete-log-group` / `put-retention-policy`
+  を実行しうる型（`ExecutionEngine`、および書き込み系の `AuditWrite` 等）への依存を一切持たせない。
+  `run_audit` ハンドラへ注入する依存は読み取り専用の型（例: `AuditRead`）のみに限定し、削除・
+  retention変更操作や監査ログの書き込み・改変を行う経路にコンパイル時点で到達不能な構造とする。
+  コードレビューのみによる担保は許容しない（型／依存性注入レベルでの構造的強制を必須とする）。
+  （本 intent の人間インタビュー Q4 で project.md への昇格を確定。開発・DevSecOps 両エージェントの
+  推奨に基づく。）
 
-### 本 intent での追加候補（Forbidden）
+## 本 intent でのスコープ外・見送り事項
 
-- NEVER（追加候補）: サブコマンド化後、`scan` サブコマンド（読み取り専用）の経路から
-  `delete-log-group` / `put-retention-policy` を呼び出せる実装にしない。破壊的操作は
-  `clean` サブコマンドの経路のみが呼び出せる構造とする。これは既存の
-  「`--execute` フラグなしでは呼ばない」制約を、フラグベースからサブコマンド（型）ベースの
-  構造的な担保に強化する候補であり、人間インタビューで project.md への昇格要否を確認する。
-- NEVER（追加候補・要確認）: `config` サブコマンドは本 intent のスコープ外であるため、本 intent の
-  作業で `config` という名前のサブコマンドを追加しない（将来のための予約语として、ヘルプ文言に
-  含めることも含め、実装しない）。既に `intent` のスコープ定義で除外されている事項の重複確認。
+- サブコマンド化後、`scan` サブコマンド（読み取り専用）の経路から破壊的操作（`delete-log-group` /
+  `put-retention-policy`）を呼び出せない構造にする、という論点についても検討したが、`scan` は
+  そもそも選択・削除フローを持たないサブコマンド（`clean` のみが破壊的操作を担う）であるため、
+  `audit` と同様の明示的な Forbidden 昇格は不要と判断した。既存の「`--execute` なしでは呼ばない」
+  Forbidden、および `clean`/`scan`/`audit` という型（コマンドの選択）による分離自体が、この安全性を
+  実質的に担保する。
+- `config` サブコマンドは本 intent のスコープ外であり、本 intent の作業で追加しない（`intent` の
+  スコープ定義で既に除外されている事項の確認であり、project.md へのハード制約としての追加は
+  不要と判断した：スコープ管理は project.md の `## Scope Overrides` 相当であり、破壊的操作の
+  安全性に関わるハード制約ではないため）。

@@ -86,6 +86,50 @@
 
 （テストコードは対象外）。 (affirmed 2026-09-10)
 
+- NEVER: `--execute` フラグが明示的に渡されていない限り、`delete-log-group` または (affirmed 2026-09-17)
+
+`put-retention-policy` を呼び出さない（dry-run をデフォルト動作とする）。 (affirmed 2026-09-17)
+
+- NEVER: 対話式マルチセレクトの初期状態を「全選択（all-selected）」にしない。初期状態は常に (affirmed 2026-09-17)
+
+全チェックOFFとする。 (affirmed 2026-09-17)
+
+- NEVER: `sts:get-caller-identity` によるアカウントID不一致を検知した際に、警告のみで処理を (affirmed 2026-09-17)
+
+続行しない。不一致が判明した時点でそのアカウントに対する処理を即座に失敗させる。 (affirmed 2026-09-17)
+
+- NEVER: CloudWatch Logs 以外のリソース種別（EC2、S3、EBS 等）への操作を v1 スコープに含めない。 (affirmed 2026-09-17)
+
+- NEVER: 削除条件のルールベース自動判定（人手の選択を経ない自動削除）を実装しない。 (affirmed 2026-09-17)
+
+- NEVER: `AssumeRole` で取得した一時クレデンシャル（`AccessKeyId` / `SecretAccessKey` / (affirmed 2026-09-17)
+
+`SessionToken`）を、監査ログ・標準出力・エラーメッセージ・パニックメッセージのいずれにも出力しない。 (affirmed 2026-09-17)
+
+クレデンシャル構造体全体を `{:?}` でダンプするような実装を禁止する。 (affirmed 2026-09-17)
+
+- NEVER: `unsafe` コードブロックを使用しない（クレートルートで `#![forbid(unsafe_code)]` を宣言する）。 (affirmed 2026-09-17)
+
+- NEVER: `unwrap()` / `expect()` / `panic!` を本番コードパス（AWS API呼び出し・Identity検証・ (affirmed 2026-09-17)
+
+削除実行のパス）で使用しない。エラーは常に `Result` で呼び出し元に伝播させる (affirmed 2026-09-17)
+
+（テストコードは対象外）。 (affirmed 2026-09-17)
+
+- NEVER: `audit`（監査ログ閲覧）サブコマンドのハンドラに、`delete-log-group` / `put-retention-policy` (affirmed 2026-09-17)
+
+を実行しうる型（`ExecutionEngine`、および書き込み系の `AuditWrite` 等）への依存を一切持たせない。 (affirmed 2026-09-17)
+
+`run_audit` ハンドラへ注入する依存は読み取り専用の型（例: `AuditRead`）のみに限定し、削除・ (affirmed 2026-09-17)
+
+retention変更操作や監査ログの書き込み・改変を行う経路にコンパイル時点で到達不能な構造とする。 (affirmed 2026-09-17)
+
+コードレビューのみによる担保は許容しない（型／依存性注入レベルでの構造的強制を必須とする）。 (affirmed 2026-09-17)
+
+（本 intent の人間インタビュー Q4 で project.md への昇格を確定。開発・DevSecOps 両エージェントの (affirmed 2026-09-17)
+
+推奨に基づく。） (affirmed 2026-09-17)
+
 ## Mandated
 
 <!-- Populated by practices-discovery affirmation gate. -->
@@ -127,6 +171,50 @@
 マージをブロックする。あわせて `cargo deny check`（advisories / licenses / bans / sources）を (affirmed 2026-09-10)
 
 CI 必須ゲートとし、`Cargo.lock` をコミットして `--locked` フラグでビルド・テストする。 (affirmed 2026-09-10)
+
+- ALWAYS: いずれかのメンバーアカウントに対する AWS API 呼び出し（スキャン・削除・retention変更の (affirmed 2026-09-17)
+
+いずれも含む）の直前に `sts:get-caller-identity` を実行し、想定アカウントIDと一致することを検証する。 (affirmed 2026-09-17)
+
+- ALWAYS: `delete-log-group` または `put-retention-policy` を実行する直前に、スキャン時点とは独立した (affirmed 2026-09-17)
+
+二重目の Identity 検証を再実行する。 (affirmed 2026-09-17)
+
+- ALWAYS: `cloudwatch-logs:describe-log-groups` はページネーションを最後まで辿り、全ページ取得後に (affirmed 2026-09-17)
+
+集計する。1ページのみで集計を確定する実装を許容しない。 (affirmed 2026-09-17)
+
+- ALWAYS: 管理アカウント自身に対しては `AssumeRole` を行わず、現在の認証情報をそのまま使用する。 (affirmed 2026-09-17)
+
+メンバーアカウントに対してのみ `AssumeRole`（デフォルトロール名 `OrganizationAccountAccessRole`、 (affirmed 2026-09-17)
+
+引数で上書き可能）を行う。 (affirmed 2026-09-17)
+
+- ALWAYS: 削除・retention変更を伴うすべての操作について、対象アカウントID・リージョン・ログループ名・ (affirmed 2026-09-17)
+
+実行時刻・成功/失敗を監査ログに出力する。無効化オプションは設けない。 (affirmed 2026-09-17)
+
+- ALWAYS: 削除・retention変更の実行前に、対象アカウントID・リージョン・ログループ名一覧・合計バイト数を (affirmed 2026-09-17)
+
+再掲した確認画面を提示する。 (affirmed 2026-09-17)
+
+- ALWAYS: 監査ログへの書き込みに失敗した場合、実行中の削除・retention変更操作自体を中断し、 (affirmed 2026-09-17)
+
+エラーとして扱う。ログが残せない操作は実行しない（警告のみで続行することは許容しない）。 (affirmed 2026-09-17)
+
+- ALWAYS: 依存クレートの脆弱性スキャン（`cargo audit`）を CI で実行し、既知脆弱性のある依存があれば (affirmed 2026-09-17)
+
+マージをブロックする。あわせて `cargo deny check`（advisories / licenses / bans / sources）を (affirmed 2026-09-17)
+
+CI 必須ゲートとし、`Cargo.lock` をコミットして `--locked` フラグでビルド・テストする。 (affirmed 2026-09-17)
+
+（本 intent での確認結果：サブコマンド化後も、上記の Identity 二重検証・監査ログ必須・dry-run既定・ (affirmed 2026-09-17)
+
+確認画面再掲の各制約は、実行系操作を担う `clean` サブコマンドの経路に読み替えて維持される。これは (affirmed 2026-09-17)
+
+既存 Mandated の適用対象をサブコマンド構造に読み替えるものであり、内容自体の変更ではない。新規 (affirmed 2026-09-17)
+
+昇格ではないため、上記リストへの追記は行わない。） (affirmed 2026-09-17)
 
 ## Corrections
 

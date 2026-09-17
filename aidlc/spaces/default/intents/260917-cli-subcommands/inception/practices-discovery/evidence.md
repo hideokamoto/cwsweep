@@ -1,4 +1,4 @@
-# Evidence — practices-discovery（再確認: 260917-cli-subcommands）
+# Evidence — practices-discovery（最終版: 260917-cli-subcommands）
 
 ## 参照した既存の affirm 済み記録
 
@@ -6,9 +6,9 @@
   `## Way of Working` / `## Walking Skeleton` / `## Testing Posture` /
   `## Deployment` / `## Code Style`（5 セクションすべて非空であることを確認済み）。
 - `aidlc/spaces/default/memory/project.md` — 同 intent で affirm 済みの
-  `## Mandated`（9項目）/ `## Forbidden`（7項目）。いずれも AWS 破壊的操作の
-  安全性（dry-run既定・二重Identity検証・監査ログ必須・クレデンシャル非出力・
-  `unsafe`禁止・`unwrap`/`expect`/`panic!`禁止）に関するハード制約。
+  `## Mandated` / `## Forbidden`。いずれも AWS 破壊的操作の安全性（dry-run既定・
+  二重Identity検証・監査ログ必須・クレデンシャル非出力・`unsafe`禁止・
+  `unwrap`/`expect`/`panic!`禁止）に関するハード制約。
 
 ## 参照したブラウンフィールド逆設計エビデンス（`aidlc/spaces/default/codekb/cwsweep/`）
 
@@ -26,46 +26,65 @@
   codekb 側に既に記述されていることを確認。また「監査ログの読み取り API 不在」が
   技術的負債シグナルとして挙げられており、新設の `audit` 閲覧サブコマンドには
   `AuditLogger`/`AuditWrite` への読み取り API 追加が必要になることを確認。
-- `technology-stack.md` / `dependencies.md` / `code-quality-assessment.md` /
-  `business-overview.md`: 参照したが、本 intent（CLI サブコマンド化）の
-  team/project 慣行の再確認に直接影響する新規事実は見つからなかった
-  （ports-and-adapters・`secrecy`によるクレデンシャルマスキング等は既存の
-  team.md/project.md の記述と整合していることを確認しただけ）。
+- `code-quality-assessment.md`: CI の `coverage` ジョブが
+  `cargo llvm-cov --lib --locked --fail-under-lines 80 --summary-only`（`--lib`
+  のみ、バイナリクレート `src/main.rs` は計測対象外）であることを、品質担当
+  エージェントの指摘により確認。
+- `technology-stack.md` / `dependencies.md` / `business-overview.md`: 参照したが、
+  本 intent（CLI サブコマンド化）の team/project 慣行の再確認に直接影響する新規
+  事実は見つからなかった（ports-and-adapters・`secrecy`によるクレデンシャル
+  マスキング等は既存の team.md/project.md の記述と整合していることを確認しただけ）。
 
 ## リポジトリ状態
 
-- 参照コミット: `git rev-parse HEAD` = `29e3a629ab808d3f5314ab7ed46ac1e756798e14`
-  （評価時点、`/home/user/cwsweep`）。
+- 参照コミット（本 stage 開始時点）: `29e3a629ab808d3f5314ab7ed46ac1e756798e14`
+- 参照コミット（本 stage 完了時点、`git rev-parse HEAD`）: `0df33b1be665ad04961720077eea9b6d0823d379`
 
-## 推論・仮説（hypothesis）
+## 支援コントリビューションからの主な指摘（反映済み）
 
-- [hypothesis] `scan`/`clean`/`audit` の3サブコマンド構成は、`architecture.md`
-  の記述と本 intent のスコープ説明から素直に導かれる分割だが、既存フラグ
-  （`--role-name` 等の設定系）を各サブコマンドにどう配分するか（共通引数として
-  `clap` の `#[command(flatten)]` を使うか、サブコマンドごとに重複定義するか）は
-  実装方針であり、team.md の Code Style としてどこまで固定するかは未確定。
-- [hypothesis] `audit` 閲覧サブコマンドは新規機能であり、既存の
-  「破壊的操作は100%パスカバレッジ＋境界値テスト」という Testing Posture の
-  対象には該当しない（閲覧のみで削除・retention変更を伴わない）と判断したが、
-  この分類が team の意図と一致するか要確認。
-- [hypothesis] CLI 引数の破壊的変更（`--scan-only`/`--execute` → サブコマンド）は
-  既存利用者への互換性影響があり得るが、本プロジェクトは単一開発者体制かつ
-  v1 未リリース段階と推測されるため、後方互換シム（旧フラグのエイリアス提供等）は
-  不要と仮置きした。人間インタビューで確認が必要。
+- **aidlc-quality-agent**: CI カバレッジ計測が `--lib` のみでバイナリクレートを
+  対象外とする点を指摘し、サブコマンドディスパッチロジックの配置（lib 側 vs
+  coverage ジョブ拡張）を人間インタビューに追加する必要性を提起（→ Q3 として
+  出題、lib 側集約で確定）。また、既存の統合テスト `tests/scan_select_execute.rs`
+  は `Cli`/`clap` パースに触れないドメイン層専用テストであり、「サブコマンド化で
+  更新が必要」というリード案の記述は不正確であるとの訂正提案（→
+  `team-practices.md` の該当箇所を訂正し、「新規の CLI 層統合テストの新設」が
+  真のギャップであると明記）。
+- **aidlc-developer-agent**: `run_scan`/`run_clean`/`run_audit` という `run_`
+  接頭辞命名が既存コードの動詞のみ命名慣習（`scan_all`/`execute`等）の自然な
+  延長とは言い切れない点、`audit` 閲覧用の新規読み取りAPIの配置モジュールが
+  未確定な点、`audit` の異常系（不正ログ行）の挙動方針が未確定な点を指摘
+  （→ それぞれ Q5・Q4（関連）・Q7 として出題し確定）。
+- **aidlc-devsecops-agent**: `audit` サブコマンドを構造的に読み取り専用にする
+  制約について、project.md の `## Forbidden`（ハード制約）への昇格を明確に
+  推奨（既存 Forbidden 群と同じ「機械的に事故を防ぐ」思想との整合性を根拠に）
+  （→ Q4 として出題し、推奨どおり Forbidden 昇格で確定）。既存のクレデンシャル
+  非露出・監査ログ必須制約は実装（`src/credentials.rs`/`src/audit.rs`）に
+  既に反映されており、サブコマンド化後も対象読み替えのみでよいと確認。
 
-## 人間インタビューで解決すべき未解決事項（Assumptions & Open Questions で再掲予定）
+## 人間インタビューの最終回答（7問すべて解決済み）
 
-1. サブコマンド化に伴う CLI インターフェースの破壊的変更について、後方互換
-   （旧フラグのエイリアス）を提供する必要があるか、それとも v1 未リリース前提で
-   不要と割り切ってよいか。
-2. `audit` 閲覧サブコマンドの読み取り専用制約（監査ログファイルへの書き込み・
-   変更・削除を一切行わない）を、project.md の Mandated/Forbidden として
-   ハード制約に昇格すべきか、それとも team.md の設計方針レベルに留めるべきか。
-3. サブコマンドハンドラの命名規則（`run_scan`/`run_clean`/`run_audit` 接頭辞方式）
-   を Code Style の追加方針として team.md に affirm してよいか。
-4. `--role-name` 等の設定系フラグを各サブコマンド共通の引数として
-   `#[command(flatten)]` で共有する設計を、Code Style/Way of Working として
-   明示的に方針化する必要があるか（単なる実装詳細として Code Generation 段階に
-   委ねてよいか）。
-5. 破壊的操作を伴う `clean` サブコマンドに到達する Bolt への毎回ゲート要件
-   （Walking Skeleton セクション既存の M6 ゲート方針の踏襲）に異論がないか。
+1. **開発フロー・デプロイ方針**: 変更なし。既存のトランクベース開発・
+   squash-merge・タグ駆動リリースをそのまま継承する。
+2. **`clean` サブコマンドの M6 ゲート**: 既存の「破壊的操作を実装する Bolt は
+   毎回ゲート」ルールは、`--execute` 相当の実行系操作を担う `clean` サブコマンドの
+   実装 Bolt にそのまま適用される（サブコマンド名の読み替えのみで、運用自体の
+   変更はない）。
+3. **サブコマンド分岐ロジックの配置（カバレッジ計測の抜け穴対策）**: `Commands`
+   （`scan`/`clean`/`audit`）へのディスパッチロジックは `lib` 側（`cli.rs` 等、
+   `cargo llvm-cov --lib` の対象範囲）に置き、`main.rs` は薄い呼び出しのみに
+   留める方針とする。CI の `coverage` ジョブ自体（`--lib` スコープ）は変更しない。
+4. **`audit` サブコマンドの構造的読み取り専用化の強制レベル**: `project.md` の
+   `## Forbidden`（ハード制約・機械的強制対象）に昇格する。`audit` ハンドラは
+   `delete-log-group` / `put-retention-policy` を実行しうる型への依存を型／
+   依存性注入レベルで一切持たない構造とする。
+5. **ハンドラ関数の命名規則**: `run_scan` / `run_clean` / `run_audit` という
+   `run_` 接頭辞方式を採用する。既存の `CliApp` メソッド命名（接頭辞なし動詞形）
+   とは異なる慣習であることを認識した上での採用。
+6. **旧フラグ（`--scan-only`/`--execute`）の後方互換**: 提供しない。v1 未リリース
+   （0.1.0）段階であることを理由に、明示的な破壊的変更として割り切る。
+   README/CHANGELOG に移行ガイドを明記する。
+7. **`audit` が不正な監査ログ行を読んだ場合の挙動**: 該当行をスキップして警告を
+   出力し、残りの正常なエントリの表示を継続する（処理全体を中断しない）。
+   これに伴い、不正フォーマット行を含むフィクスチャで正常行が引き続き表示される
+   ことを検証するテストを追加テスト観点として要求する。
