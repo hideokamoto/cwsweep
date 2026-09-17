@@ -14,10 +14,10 @@ name = "cwsweep"
 path = "src/lib.rs"
 
 [dependencies]
-aws-config = "1"
-aws-sdk-organizations = "1"
-aws-sdk-sts = "1"
-aws-sdk-cloudwatchlogs = "1"
+aws-config = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio", "credentials-process", "sso"] }
+aws-sdk-organizations = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-sdk-sts = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-sdk-cloudwatchlogs = { version = "1", default-features = false, features = ["rt-tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 clap = { version = "4", features = ["derive"] }
 inquire = "0.7"
