@@ -12,6 +12,10 @@ cwsweep --regions us-east-1,us-west-2
 # 出力フォーマットをJSONに切り替える（Cursor/Claude Code等のCLIエージェント向け）
 cwsweep --regions us-east-1 --output json
 
+# スキャン結果を出力して終了する（対話式の選択・確認へ進まない）。
+# 標準入力がTTYでない場合（パイプ・CI等）はフラグ無しでも同じ挙動になる。
+cwsweep --regions us-east-1 --output json --scan-only
+
 # メンバーアカウントへAssumeRoleする際のロール名を上書きする（既定: OrganizationAccountAccessRole）
 cwsweep --regions us-east-1 --role-name CustomOrgRole
 
