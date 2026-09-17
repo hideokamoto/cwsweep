@@ -13,7 +13,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use aws_config::retry::RetryConfig;
 use aws_config::BehaviorVersion;
-use clap::Parser;
 use secrecy::{ExposeSecret, SecretString};
 use uuid::Uuid;
 
@@ -433,7 +432,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_writer(std::io::stderr)
         .init();
 
-    let cli = Cli::parse();
+    let cli = Cli::parse_args();
     let run_id = Uuid::new_v4().to_string();
 
     // `base_config`はクレデンシャル解決のみに用いる。各サービスクライアントは
