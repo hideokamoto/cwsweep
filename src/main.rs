@@ -430,6 +430,7 @@ fn action_kind_from_prompt() -> Result<ActionKind, String> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
         .init();
 
     let cli = Cli::parse_args();
