@@ -3863,3 +3863,64 @@
 **Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-18T13:17:47Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-18T13:18:11Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Context**: construction > audit-reader > functional-design > functional-design-questions.md
+**Summary Authorization Id**: fd97302a062c24f0ebc9ad68b63fd0f9e586114ea5dff5ff15111f2d08a22d15
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-18T13:18:15Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: functional-design
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Questions SHA-256**: c26a27e52f7062856dc8d8033f300f6206f60d19325c258c381c508386df39e0
+**Hash Scope**: confirmed-content-v1
+**Unit**: audit-reader
+**Summary Authorization Id**: c5da5774a46968ff39fd844c52ecd5ff45a0aa5d05b8b65460bcc2adeecaf459
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-18T13:18:57Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: acceff5a422abefd0
+**Message**: cli-foundationはいつ着手する
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T13:18:59Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T13:19:53Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T13:21:49Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
