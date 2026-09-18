@@ -32,7 +32,7 @@
 - **In Progress**: infrastructure-design
 
 ## Runtime State
-- **Revision Count**: 7
+- **Revision Count**: 8
 
 - **Construction Iteration**: unit-major
 
@@ -64,9 +64,7 @@
 
 
 
-- **Active Unit**: audit-reader
 
-- **Unit State**: in-progress
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -108,9 +106,9 @@
 ### CONSTRUCTION PHASE
 Per unit: [TBD]
 - [-] functional-design — EXECUTE
-- [-] nfr-requirements — EXECUTE
-- [-] nfr-design — EXECUTE
-- [-] infrastructure-design — EXECUTE
+- [ ] nfr-requirements — EXECUTE
+- [ ] nfr-design — EXECUTE
+- [ ] infrastructure-design — EXECUTE
 - [-] code-generation — EXECUTE
 - [ ] build-and-test — EXECUTE
 - [ ] ci-pipeline — EXECUTE
@@ -128,7 +126,7 @@ Per unit: [TBD]
 <!-- Derived, engine-owned projection; routing ignores hand edits. -->
 | unit | owner | functional-design | nfr-requirements | nfr-design | infrastructure-design | code-generation | gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| audit-reader | - | [x] | [x] | [x] | [ ] | [x] | [-] |
+| audit-reader | - | [ ] | [ ] | [ ] | [ ] | [x] | [R] |
 | cli-foundation | - | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | release-docs | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
 
@@ -137,7 +135,7 @@ Per unit: [TBD]
 - **Current Stage**: infrastructure-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-09-18T21:36:00Z
+- **Last Updated**: 2026-09-18T22:17:00Z
 
 ## Session Resume Point
 - **Last Completed Stage**: delivery-planning
