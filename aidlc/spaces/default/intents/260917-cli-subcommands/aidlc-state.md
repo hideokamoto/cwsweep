@@ -85,7 +85,7 @@
 Per unit: [TBD]
 - [-] functional-design — EXECUTE
 - [-] nfr-requirements — EXECUTE
-- [ ] nfr-design — EXECUTE
+- [-] nfr-design — EXECUTE
 - [ ] infrastructure-design — EXECUTE
 - [ ] code-generation — EXECUTE
 - [ ] build-and-test — EXECUTE
@@ -104,7 +104,7 @@ Per unit: [TBD]
 <!-- Derived, engine-owned projection; routing ignores hand edits. -->
 | unit | owner | functional-design | nfr-requirements | nfr-design | infrastructure-design | code-generation | gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| audit-reader | - | [x] | [x] | [ ] | [ ] | [ ] | [-] |
+| audit-reader | - | [x] | [x] | [x] | [ ] | [ ] | [-] |
 | cli-foundation | - | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | release-docs | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
 
