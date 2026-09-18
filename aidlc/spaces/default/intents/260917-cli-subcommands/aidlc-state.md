@@ -84,7 +84,7 @@
 ### CONSTRUCTION PHASE
 Per unit: [TBD]
 - [-] functional-design — EXECUTE
-- [ ] nfr-requirements — EXECUTE
+- [-] nfr-requirements — EXECUTE
 - [ ] nfr-design — EXECUTE
 - [ ] infrastructure-design — EXECUTE
 - [ ] code-generation — EXECUTE
@@ -104,7 +104,7 @@ Per unit: [TBD]
 <!-- Derived, engine-owned projection; routing ignores hand edits. -->
 | unit | owner | functional-design | nfr-requirements | nfr-design | infrastructure-design | code-generation | gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| audit-reader | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
+| audit-reader | - | [x] | [x] | [ ] | [ ] | [ ] | [-] |
 | cli-foundation | - | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | release-docs | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
 
