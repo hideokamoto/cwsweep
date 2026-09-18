@@ -1846,3 +1846,322 @@
 **Context**: .aidlc-reviewer-dispatch.json
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-09-18T12:02:58Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: ab522643dbebcde4b
+**Message**: レビュー結果を待つ
+
+---
+
+## Reviewer Scope Blocked
+**Timestamp**: 2026-09-18T12:03:24Z
+**Event**: REVIEWER_SCOPE_BLOCKED
+**Tool**: Grep
+**Target**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands
+**Stage**: functional-design
+**Unit**: audit-reader
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-18T12:04:15Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/.aidlc-reviews/functional-design/units/audit-reader/0f5a2f91c3f36854/1.review.md
+**Context**: .aidlc-reviews > functional-design > units > audit-reader > 0f5a2f91c3f36854 > 1.review.md
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T12:04:28Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Subagent Completed
+**Timestamp**: 2026-09-18T12:04:29Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: aidlc-architecture-reviewer-agent
+**Agent ID**: a0c9d74eca1a09670
+**Message**: Review complete and handed back.
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T12:04:31Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Review Completed
+**Timestamp**: 2026-09-18T12:04:34Z
+**Event**: REVIEW_COMPLETED
+**Stage**: functional-design
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: audit-reader
+**Iteration**: 1
+**Verdict**: READY
+**Request Fingerprint**: sha256:f609b4ce7d9d3fe0f3de8e7145480f3d1a405958ad281d24d31ea51df491b3d3
+**Artifact Fingerprint**: sha256:f609b4ce7d9d3fe0f3de8e7145480f3d1a405958ad281d24d31ea51df491b3d3
+**Request Id**: review:ccaed0c13ea3988bfe649a916b8df048
+**Review Record**: .aidlc-reviews/functional-design/units/audit-reader/0f5a2f91c3f36854/1.json
+**Review Record Digest**: sha256:7743b7904d41f86d06be67647cccb945a77eea15259f453a8f59dea6eea13251
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T12:05:26Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-18T12:06:33Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state unit start --stage functional-design --unit audit-reader
+**Error**: Refusing to start unit "audit-reader" for "functional-design": the engine currently routes a ask directive. Run the exact directive.stage/directive.unit pair returned by aidlc-orchestrate.ts next.
+
+---
+
+## Review Freeze Blocked
+**Timestamp**: 2026-09-18T12:08:33Z
+**Event**: REVIEW_FREEZE_BLOCKED
+**Tool**: Bash
+**Target**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/entities.md
+**Stage**: functional-design
+**Unit**: audit-reader
+
+---
+
+## Gate Rejected
+**Timestamp**: 2026-09-18T12:09:19Z
+**Event**: GATE_REJECTED
+**Stage**: code-generation
+**Unit**: audit-reader
+**Gate Scope**: unit-end
+**Gate Stages**: functional-design,nfr-requirements,nfr-design,infrastructure-design,code-generation
+**Feedback**: audit-readerのfunctional-design UNIT_COMPLETED receiptがunit start/completeを一度も呼んでいなかったため依然欠落している。redo jumpで作り直した後、entities.md等の内容自体は変更せず、レシート記録のための再入場のみを行う。
+
+---
+
+## Stage Revising
+**Timestamp**: 2026-09-18T12:09:19Z
+**Event**: STAGE_REVISING
+**Stage**: code-generation
+**Unit**: audit-reader
+**Gate Scope**: unit-end
+**Gate Stages**: functional-design,nfr-requirements,nfr-design,infrastructure-design,code-generation
+**Revision count**: 5
+**Feedback**: audit-readerのfunctional-design UNIT_COMPLETED receiptがunit start/completeを一度も呼んでいなかったため依然欠落している。redo jumpで作り直した後、entities.md等の内容自体は変更せず、レシート記録のための再入場のみを行う。
+
+---
+
+## Stage Jump
+**Timestamp**: 2026-09-18T12:09:22Z
+**Event**: STAGE_JUMPED
+**Direction**: REDO
+**Source**: functional-design
+**Target**: functional-design
+**Scope**: classic
+**Details**: REDO jump from functional-design to functional-design (3.1). Scope: classic.
+**Source Baseline**: sha256:b94e7e85a951f0ea55539ac84cbbf462f6229e2c42f4a917e9b68a811e1f3b8c
+
+---
+
+## Stage Start
+**Timestamp**: 2026-09-18T12:09:22Z
+**Event**: STAGE_STARTED
+**Stage**: functional-design
+**Agent**: aidlc-architect-agent
+**Source Baseline**: sha256:b94e7e85a951f0ea55539ac84cbbf462f6229e2c42f4a917e9b68a811e1f3b8c
+
+---
+
+## Unit Started
+**Timestamp**: 2026-09-18T12:10:02Z
+**Event**: UNIT_STARTED
+**Stage**: functional-design
+**Unit**: audit-reader
+**Run floor**: STAGE_JUMPED:2026-09-18T12:09:22Z#5
+
+---
+
+## Unit Completed
+**Timestamp**: 2026-09-18T12:10:13Z
+**Event**: UNIT_COMPLETED
+**Stage**: functional-design
+**Unit**: audit-reader
+**Run floor**: STAGE_JUMPED:2026-09-18T12:09:22Z#5
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-18T12:10:21Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Context**: construction > audit-reader > functional-design > functional-design-questions.md
+**Summary Authorization Id**: 2fa99df37c299e2f972d1d357dde7c70913c599fefdd83fcaab6851d30787f5e
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-18T12:10:24Z
+**Event**: DECISION_RECORDED
+**Stage**: functional-design
+**Decision**: Consolidated summary confirmation
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Unit**: audit-reader
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T12:11:37Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-18T12:11:45Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Context**: construction > audit-reader > functional-design > functional-design-questions.md
+**Summary Authorization Id**: 2fa99df37c299e2f972d1d357dde7c70913c599fefdd83fcaab6851d30787f5e
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-18T12:11:48Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: functional-design
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/functional-design/functional-design-questions.md
+**Questions SHA-256**: c26a27e52f7062856dc8d8033f300f6206f60d19325c258c381c508386df39e0
+**Hash Scope**: confirmed-content-v1
+**Unit**: audit-reader
+**Summary Authorization Id**: 6d82ca2292d31becddf9b0cebff6db7ed2f5cf1b0fcb16cbae25ad881f5897cd
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-18T12:12:14Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/nfr-requirements-questions.md
+**Context**: construction > audit-reader > nfr-requirements > nfr-requirements-questions.md
+**Summary Authorization Id**: c6eda2cc1e15f8a6e641ea7a9246cb39d60994b1311bccd50883ed73694f83ff
+
+---
+
+## Decision Recorded
+**Timestamp**: 2026-09-18T12:12:17Z
+**Event**: DECISION_RECORDED
+**Stage**: nfr-requirements
+**Decision**: Consolidated summary confirmation
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/nfr-requirements-questions.md
+**Unit**: audit-reader
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T12:14:43Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Artifact Updated
+**Timestamp**: 2026-09-18T12:14:46Z
+**Event**: ARTIFACT_UPDATED
+**Tool**: Edit
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/nfr-requirements-questions.md
+**Context**: construction > audit-reader > nfr-requirements > nfr-requirements-questions.md
+**Summary Authorization Id**: c6eda2cc1e15f8a6e641ea7a9246cb39d60994b1311bccd50883ed73694f83ff
+
+---
+
+## Summary Confirmation Recorded
+**Timestamp**: 2026-09-18T12:14:50Z
+**Event**: SUMMARY_CONFIRMATION_RECORDED
+**Stage**: nfr-requirements
+**Details**: Looks correct
+**Checkpoint**: Consolidated Summary Confirmation
+**Questions File**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/nfr-requirements-questions.md
+**Questions SHA-256**: cab102fd109cdb7bdb9a3b3e93ea6b61be41aaf5d29b56fbc0391de6f7c1776e
+**Hash Scope**: confirmed-content-v1
+**Unit**: audit-reader
+**Summary Authorization Id**: 2a3c886b70201fae024f7bed85dd6ebc1ab3cfef68ee7de27052284b4197ae33
+
+---
+
+## Change Accepted
+**Timestamp**: 2026-09-18T12:14:53Z
+**Event**: CHANGE_ACCEPTED
+**Stage**: nfr-requirements
+**Unit**: audit-reader
+**Checkpoint**: summary-confirmation
+**Changed**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/security-requirements.md
+**Recorded**: 2a3c886b70201fae024f7bed85dd6ebc1ab3cfef68ee7de27052284b4197ae33
+**Current**: c661b610fe155ee60b32c0f283462414e81e3ea088ffd83eee931a17818912cc
+**Details**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/security-requirements.md was saved without the current summary confirmation. Continuing (Change Control: relaxed).
+
+---
+
+## Change Accepted
+**Timestamp**: 2026-09-18T12:14:53Z
+**Event**: CHANGE_ACCEPTED
+**Stage**: nfr-requirements
+**Unit**: audit-reader
+**Checkpoint**: summary-confirmation
+**Changed**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/tech-stack-decisions.md
+**Recorded**: 2a3c886b70201fae024f7bed85dd6ebc1ab3cfef68ee7de27052284b4197ae33
+**Current**: c661b610fe155ee60b32c0f283462414e81e3ea088ffd83eee931a17818912cc
+**Details**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/tech-stack-decisions.md was saved without the current summary confirmation. Continuing (Change Control: relaxed).
+
+---
+
+## Change Accepted
+**Timestamp**: 2026-09-18T12:14:53Z
+**Event**: CHANGE_ACCEPTED
+**Stage**: nfr-requirements
+**Unit**: audit-reader
+**Checkpoint**: summary-confirmation
+**Changed**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/traceability.json
+**Recorded**: 2a3c886b70201fae024f7bed85dd6ebc1ab3cfef68ee7de27052284b4197ae33
+**Current**: c661b610fe155ee60b32c0f283462414e81e3ea088ffd83eee931a17818912cc
+**Details**: aidlc/spaces/default/intents/260917-cli-subcommands/construction/audit-reader/nfr-requirements/traceability.json was saved without the current summary confirmation. Continuing (Change Control: relaxed).
+
+---
+
+## Review Requested
+**Timestamp**: 2026-09-18T12:14:53Z
+**Event**: REVIEW_REQUESTED
+**Stage**: nfr-requirements
+**Reviewer**: aidlc-architecture-reviewer-agent
+**Unit**: audit-reader
+**Iteration**: 1
+**Artifact Fingerprint**: sha256:3898972ccec5a4c1e7114c6780f1a99ec46c45f2f6f7642425dca504888cf8dd
+**Request Id**: review:c6dac5de4f3beb0e64f318c14711f102
+
+---
+
+## Artifact Created
+**Timestamp**: 2026-09-18T12:15:00Z
+**Event**: ARTIFACT_CREATED
+**Tool**: Write
+**File**: <project-dir>/aidlc/spaces/default/intents/260917-cli-subcommands/.aidlc-reviewer-dispatch.json
+**Context**: .aidlc-reviewer-dispatch.json
+
+---
