@@ -66,6 +66,10 @@
 
 
 
+- **Active Unit**: audit-reader
+
+- **Unit State**: in-progress
+
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
 
@@ -135,7 +139,7 @@ Per unit: [TBD]
 - **Current Stage**: infrastructure-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-09-18T22:17:00Z
+- **Last Updated**: 2026-09-18T22:24:10Z
 
 ## Session Resume Point
 - **Last Completed Stage**: delivery-planning
