@@ -1362,3 +1362,52 @@
 **Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
 
 ---
+
+## Subagent Completed
+**Timestamp**: 2026-09-18T11:01:14Z
+**Event**: SUBAGENT_COMPLETED
+**Agent Type**: 
+**Agent ID**: a83607658cbe07312
+**Message**: Build and Testに進めて
+
+---
+
+## Session End
+**Timestamp**: 2026-09-18T11:05:54Z
+**Event**: SESSION_ENDED
+**Reason**: other
+
+---
+
+## Session Resume
+**Timestamp**: 2026-09-18T11:31:24Z
+**Event**: SESSION_RESUMED
+**Source**: resume
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-18T11:31:26Z
+**Event**: HUMAN_TURN
+**Session**: 9e4e40d8-04b9-562b-96eb-45ce48bb363e
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-18T11:33:54Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state unit start
+**Error**: Missing --stage <slug>
+
+---
+
+## Error Logged
+**Timestamp**: 2026-09-18T11:33:57Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-state
+**Command**: aidlc-state unit start --stage functional-design --unit audit-reader
+**Error**: Refusing to start unit "audit-reader" for "functional-design": the engine currently routes a ask directive. Run the exact directive.stage/directive.unit pair returned by aidlc-orchestrate.ts next.
+
+---
