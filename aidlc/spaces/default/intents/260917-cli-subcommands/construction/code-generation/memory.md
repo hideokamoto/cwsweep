@@ -12,6 +12,3 @@
 
 ## Open questions
 <!-- example: 2026-05-29T10:14:32Z — confirm the retention window with compliance before the next stage hardens the schema -->
-2026-09-18T02:32:37Z — advisory reviewer (audit-reader, R-01, Minor): cicd-pipeline.md's GAP note hardcodes "Build and Testステージ（3.6）" instead of referencing the stage by slug — could drift if stage numbering changes.
-2026-09-18T02:32:37Z — advisory reviewer (audit-reader, R-02, Minor): traceability.json's NFR3.2 GAP target string doesn't carry the candidate remediation approaches that cicd-pipeline.md's prose lists — a JSON-only reader could miss them.
-2026-09-18T02:32:37Z — carried forward from nfr-design: NFR3.2 (100% path coverage for audit-reader's error paths) has no mechanical CI enforcement yet (single global 80% floor); Build and Test needs to decide how to verify it.

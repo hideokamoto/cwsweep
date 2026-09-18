@@ -44,6 +44,10 @@
 
 - **Skeleton Stance**: off
 
+- **Parked**: 2026-09-18T06:30:42Z
+
+- **Parked At Stage**: functional-design
+
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
 
@@ -86,7 +90,7 @@ Per unit: [TBD]
 - [-] functional-design — EXECUTE
 - [-] nfr-requirements — EXECUTE
 - [-] nfr-design — EXECUTE
-- [ ] infrastructure-design — EXECUTE
+- [-] infrastructure-design — EXECUTE
 - [ ] code-generation — EXECUTE
 - [ ] build-and-test — EXECUTE
 - [ ] ci-pipeline — EXECUTE
@@ -104,7 +108,7 @@ Per unit: [TBD]
 <!-- Derived, engine-owned projection; routing ignores hand edits. -->
 | unit | owner | functional-design | nfr-requirements | nfr-design | infrastructure-design | code-generation | gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| audit-reader | - | [x] | [x] | [x] | [ ] | [ ] | [-] |
+| audit-reader | - | [x] | [x] | [x] | [x] | [ ] | [-] |
 | cli-foundation | - | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | release-docs | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
 
@@ -113,7 +117,7 @@ Per unit: [TBD]
 - **Current Stage**: functional-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-09-18T01:49:19Z
+- **Last Updated**: 2026-09-18T06:30:42Z
 
 ## Session Resume Point
 - **Last Completed Stage**: delivery-planning
