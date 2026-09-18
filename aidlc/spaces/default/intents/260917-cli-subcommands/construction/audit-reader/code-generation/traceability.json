@@ -1,0 +1,232 @@
+{
+  "unit": "audit-reader",
+  "intent": "260917-cli-subcommands",
+  "source_file": "src/audit.rs",
+  "test_module": "src::audit::audit_reader_tests",
+  "test_command": "cargo test --lib audit_reader_tests:: --locked",
+  "traceability": [
+    {
+      "id": "FR4.1",
+      "description": "audit-readerはintent/result両event種別を絞り込まず全件返す（表示自体はcli-foundationの責務）",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReadEntry (event: AuditEventKind field)",
+        "src/audit.rs::AuditReader::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_preserves_order_across_multiple_valid_lines"
+      ],
+      "notes": "AuditReader::entriesはevent値で除外せず全行をAuditReadOutcome.entriesへ積む（BR5.1）。"
+    },
+    {
+      "id": "FR4.2",
+      "description": "初回実装は絞り込み機能を持たずファイル全体を列挙する",
+      "plan_step": "Step 2, Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditRead::entries",
+        "src/audit.rs::AuditReader::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_preserves_order_across_multiple_valid_lines"
+      ],
+      "notes": "entries()はフィルタ引数を受け付けないシグネチャ（BR3.1）。"
+    },
+    {
+      "id": "FR4.4",
+      "description": "不正フォーマット行はスキップし警告出力の上で処理を継続する",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries (serde_json::from_str失敗分岐)",
+        "src/audit.rs::SkippedLine"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_skips_malformed_line_and_continues_with_warning"
+      ],
+      "notes": "BR1.1準拠。(a)不正行のSkippedLine記録と(b)前後の正常行の継続表示の両方を1テストで検証（team.md Q7）。"
+    },
+    {
+      "id": "FR4.5",
+      "description": "audit読み取り経路はExecutionEngine/AuditWrite書き込み系型に到達不能でなければならない",
+      "plan_step": "Step 4",
+      "code_symbols": [
+        "src/audit.rs (// === AuditRead (read-only) region begin/end === マーカーで囲んだ領域全体)",
+        "src/audit.rs::AuditRead",
+        "src/audit.rs::AuditReader"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::audit_reader_module_has_no_execution_or_write_dependency"
+      ],
+      "notes": "BR4.2準拠。静的テキスト検査は多層防御の一部であり、主たる保証は型を共有しない設計とentries(&self)のシグネチャ自体にある（security-design.md NFR2.1/NFR2.2、advisory review R-01対応）。"
+    },
+    {
+      "id": "FR4.6",
+      "description": "監査ログファイル不在は空の正常結果として扱う",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries (io::ErrorKind::NotFound分岐)"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_returns_empty_outcome_when_file_does_not_exist",
+        "audit::audit_reader_tests::entries_never_creates_or_writes_the_target_file"
+      ],
+      "notes": "BR2.1準拠。"
+    },
+    {
+      "id": "BR1.1",
+      "description": "パース不能/フィールド欠落行はSkippedLineとして記録し警告出力後に継続する",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries",
+        "src/audit.rs::SkippedLine"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_skips_malformed_line_and_continues_with_warning"
+      ]
+    },
+    {
+      "id": "BR1.2",
+      "description": "run_id/timestamp/account_id/region/log_group_name/action_kind/event/successの8フィールド全てが揃った行のみ有効なAuditReadEntry",
+      "plan_step": "Step 2",
+      "code_symbols": [
+        "src/audit.rs::AuditReadEntry"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::audit_read_entry_roundtrips_through_json",
+        "audit::audit_reader_tests::audit_read_entry_deserialization_fails_when_required_field_missing"
+      ]
+    },
+    {
+      "id": "BR2.1",
+      "description": "監査ログファイル不在時はエラーとせず空のAuditReadOutcomeを返す",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_returns_empty_outcome_when_file_does_not_exist"
+      ]
+    },
+    {
+      "id": "BR2.2",
+      "description": "ファイル不在以外のI/Oエラーは行単位のスキップ処理を経ずAuditReadError::Ioとして伝播する",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReadError::Io",
+        "src/audit.rs::AuditReader::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_returns_io_error_when_path_is_not_a_regular_file"
+      ]
+    },
+    {
+      "id": "BR3.1",
+      "description": "絞り込み機能を持たない（初回実装）",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditRead::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_preserves_order_across_multiple_valid_lines"
+      ]
+    },
+    {
+      "id": "BR3.2",
+      "description": "entries/skipped_linesはファイル中の出現順を保持する",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries",
+        "src/audit.rs::AuditReadOutcome"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_preserves_order_across_multiple_valid_lines",
+        "audit::audit_reader_tests::entries_skips_malformed_line_and_continues_with_warning"
+      ]
+    },
+    {
+      "id": "BR4.1",
+      "description": "書き込み・ファイル作成を一切行わない",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries (File::openのみ使用、OpenOptions::write/create/append不使用)"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_never_creates_or_writes_the_target_file"
+      ]
+    },
+    {
+      "id": "BR4.2",
+      "description": "AuditRead実装はExecutionEngine/AuditWriteへの依存をコンパイル時点で到達不能な構造として持たない",
+      "plan_step": "Step 4",
+      "code_symbols": [
+        "src/audit.rs (AuditRead region markers)",
+        "src/audit.rs::AuditRead",
+        "src/audit.rs::AuditReader"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::audit_reader_module_has_no_execution_or_write_dependency"
+      ]
+    },
+    {
+      "id": "NFR2.1",
+      "description": "audit読み取り経路の構造的分離（依存グラフレベル）",
+      "plan_step": "Step 4",
+      "code_symbols": [
+        "src/audit.rs (AuditRead region markers)"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::audit_reader_module_has_no_execution_or_write_dependency"
+      ],
+      "deviation": "静的テキスト検査はエイリアス・間接参照までは検出できない多層防御の一部（code-summary.md参照）。"
+    },
+    {
+      "id": "NFR2.2",
+      "description": "構造的分離の機械的検証（コードレビューのみに頼らない）",
+      "plan_step": "Step 4",
+      "code_symbols": [
+        "src/audit.rs (AuditRead region markers)"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::audit_reader_module_has_no_execution_or_write_dependency"
+      ],
+      "deviation": "同上。"
+    },
+    {
+      "id": "NFR3.1",
+      "description": "壊れた行に遭遇しても処理全体を中断しない（データ整合性・堅牢性）",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_skips_malformed_line_and_continues_with_warning"
+      ]
+    },
+    {
+      "id": "NFR3.2",
+      "description": "異常系分岐の100%パスカバレッジ＋境界値テスト（team.md要求）",
+      "plan_step": "Step 6",
+      "code_symbols": [],
+      "tests": [
+        "audit::audit_reader_tests::entries_returns_empty_outcome_when_file_does_not_exist",
+        "audit::audit_reader_tests::entries_returns_io_error_when_path_is_not_a_regular_file",
+        "audit::audit_reader_tests::entries_skips_malformed_line_and_continues_with_warning"
+      ],
+      "deviation": "全異常系分岐はテストで個別にカバーしているが、CIのcoverageジョブは単一グローバル80%閾値のみを機械的に強制しており、100%パスカバレッジ要求を自動検出する専用ゲートは存在しない（既存のグローバルGAP、本Unit固有の新規ギャップではない）。"
+    },
+    {
+      "id": "NFR3.3",
+      "description": "読み取り専用性の保証（書き込みフラグを一切使用しない）",
+      "plan_step": "Step 3",
+      "code_symbols": [
+        "src/audit.rs::AuditReader::entries (File::open使用、OpenOptions::write/create/append不使用)"
+      ],
+      "tests": [
+        "audit::audit_reader_tests::entries_never_creates_or_writes_the_target_file"
+      ]
+    }
+  ],
+  "deviations_summary": [
+    "NFR3.2: coverageジョブの単一グローバル80%閾値では100%パスカバレッジ要求を機械的に強制できない（既知のGAP、既存CI構成の変更は本Unitのスコープ外）。",
+    "NFR2.1/NFR2.2: audit_reader_module_has_no_execution_or_write_dependencyはテキストベースの静的検査であり、エイリアスや間接参照までは検出できない多層防御の一部（advisory review R-01の指摘どおり）。"
+  ]
+}
