@@ -209,7 +209,10 @@
               "AIDLC_DISABLE_PLAN_APPROVAL_GUARD",
               "AIDLC_DISABLE_REVIEWER_SCOPE_HOOK",
               "AIDLC_DISABLE_REVIEW_FREEZE_HOOK",
-              "AIDLC_DISABLE_USAGE_TRACKING"
+              "AIDLC_DISABLE_USAGE_TRACKING",
+              "AIDLC_DISABLE_SENSORS",
+              "AIDLC_DISABLE_LEARNINGS",
+              "AIDLC_DISABLE_SUMMARY_CONFIRMATION"
             ]
           }
         }
