@@ -28,21 +28,29 @@ shared-schema:
     - name: AuditRead
       kind: trait
       methods:
-        - signature: "fn entries(&self) -> Result<Vec<AuditEntry>, AuditReadError>"
+        - signature: "fn entries(&self) -> Result<AuditReadOutcome, AuditReadError>"
           description: >
             監査ログファイルを行単位でストリーミング読み取りし、パース済みの
-            AuditEntry一覧を返す。不正フォーマット行はスキップし、呼び出し元が
-            警告として扱えるよう並行してSkippedLine一覧も返す（下記
-            AuditReadOutcome参照）。
+            AuditEntry一覧と、スキップした不正行の記録(SkippedLine一覧)を
+            AuditReadOutcomeとして返す。警告の標準エラーへの出力（FR4.4）は
+            AuditReader実装自身が読み取り中に副作用として行う。
+            AuditReadOutcome.skipped_linesは、その警告と対応する構造化情報
+            （何行目をどんな理由でスキップしたか）を呼び出し元・テストコードが
+            検証できるようにするためのものであり、呼び出し元が改めて警告を
+            出力する責務は負わない。
       forbidden_dependencies:
         - ExecutionEngine
         - AuditWrite
       note: >
         AuditReadの実装（および実装が依存する型グラフ）はExecutionEngine・
         AuditWrite等の削除・retention変更・監査ログ書き込み系の型に一切
-        依存しない。この非依存性は本契約の中核であり、実装時に構造的
-        回帰テスト（コンパイル成立を前提とした型/モジュール境界テスト）で
-        検証する（NFR2）。
+        依存しない。この非依存性は本契約の中核である。ただし
+        `forbidden_dependencies`フィールド自体はドキュメント上の宣言であり、
+        それ自体がコンパイル時点での到達不能性を強制する機構ではない
+        （YAMLに書くだけでは担保されない）。実際の担保はCode Generation/
+        Build and Test段階で設計される構造的回帰テスト（コンパイル成立を
+        前提とした型/モジュール境界テスト、またはアーキテクチャレベルの
+        統合テスト）に依存する（NFR2、team-practices.md Q4）。
     - name: AuditEntry
       kind: struct
       identifier: "(timestamp, account_id, region, log_group_name)の組（一意性は記録順序で担保、厳密なユニーク制約はない）"
@@ -131,6 +139,14 @@ shared-schema:
     FR3.1-FR3.5(clean)、FR4.1-FR4.6(audit)、FR6.1(旧フラグ廃止・後方互換なし)。
     cli-foundationの実装がこれらのFRを満たすことを前提に、release-docsは
     実装確定後の最終仕様（旧フラグとの正確な対応表）を記述する。
+  integration_points: >
+    本契約はunit-of-work-dependency.mdの統合点表が挙げる2件を統合したものである:
+    (1) Commands::Audit バリアントの確定仕様（release-docsが新設audit
+    サブコマンドの説明を書く際の入力）、(2) run_scan/run_cleanのフラグ仕様と
+    旧フラグ（--scan-only/--execute）との対応表（release-docsが移行ガイドを
+    書く際の入力）。1つの境界（cli-foundation→release-docs）に属するため
+    本ファイルでは1件の契約としてまとめているが、release-docs側はこの2つの
+    情報源を独立に参照する。
   versioning: >
     Contract 1と同様。CLI引数の破壊的変更自体はFR6.1で既に決定済みであり、
     本契約が扱うのは「その決定をドキュメントへどう反映するか」の入力仕様のみ。

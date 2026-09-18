@@ -32,7 +32,7 @@
 - **In Progress**: contract-design
 
 ## Runtime State
-- **Revision Count**: 2
+- **Revision Count**: 3
 
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
@@ -95,7 +95,7 @@ Per unit: [TBD]
 - **Current Stage**: contract-design
 - **Next Stage**: delivery-planning
 - **Status**: Running
-- **Last Updated**: 2026-09-17T23:42:27Z
+- **Last Updated**: 2026-09-17T23:51:09Z
 
 ## Session Resume Point
 - **Last Completed Stage**: units-generation

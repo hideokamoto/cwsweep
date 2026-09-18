@@ -12,3 +12,4 @@
 
 ## Open questions
 <!-- example: 2026-05-29T10:14:32Z — confirm the retention window with compliance before the next stage hardens the schema -->
+- 2026-09-17T00:00:00Z — アーキテクチャレビュアー(advisory)がREADY判定を返したが、R-01(Major)として、Contract 1の`AuditRead::entries`シグネチャが`Result<Vec<AuditEntry>, AuditReadError>`を返すと記述しながら、同じ説明文が「SkippedLine一覧もAuditReadOutcome経由で返す」と矛盾した記述をしている点を指摘。どちらが正か（entries()がAuditReadOutcomeを返すのか、Vec<AuditEntry>のみでSkippedLineは別の副作用的経路なのか）を承認ゲートで人間に確認する必要がある。R-02/R-03はMinorで、承認ゲートで受容可否を委ねる。
