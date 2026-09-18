@@ -1,9 +1,11 @@
-# Team-Level Rules
+# Team Practices — 最終版（260917-cli-subcommands）
 
-> This team's affirmed practices and corrections. Loaded after `org.md` as
-> strict-additive guidance; contradictions with broader policy are rejected.
-> Populated by the practices-discovery affirmation gate. Edit at the gate,
-> not directly.
+> `260910-cwsweep-cli` で affirm 済みの `team.md` をこの intent 向けに
+> 再確認し、人間インタビュー（7問）の回答で最終確定したドラフトである。
+> スコープは CLI をフラグ方式（`--scan-only`/`--execute`）から明示的な
+> サブコマンド（`scan` / `clean` / 閲覧用 `audit`）へ再構成することで、
+> `config` サブコマンドはスコープ外。既存の affirm 済み内容は原則そのまま
+> 継承し、本 intent 固有の確定事項のみ追記している。
 
 ## Way of Working
 
@@ -102,10 +104,6 @@
   パース検証は `Cli::try_parse_from` を使ったインプロセスの単体テスト（`cli.rs` 内
   `#[cfg(test)]`）を基本とし、`--lib` カバレッジにも算入される形にすることを推奨する。
 
-## Change Control
-
-<!-- Affirmed by the team. Mode: strict or relaxed. Strict here holds for every intent and cannot be changed from chat. -->
-
 ## Deployment
 
 - 本ツールはサーバーへのデプロイを行わない、スタンドアロンのバイナリ配布物（Rust CLI）である。
@@ -162,14 +160,3 @@
   構成とする。この制約は `project.md` の `## Forbidden` にハード制約として昇格したため
   （`discovered-rules.md` 参照）、Code Style としても対応するモジュール／依存注入設計の指針として
   明記する。
-## Forbidden
-
-<!-- Team-specific forbidden patterns -->
-
-## Mandated
-
-<!-- Team-specific mandates -->
-
-## Corrections
-
-<!-- Self-learning loop appends here. -->

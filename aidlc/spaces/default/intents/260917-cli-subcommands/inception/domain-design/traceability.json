@@ -1,0 +1,43 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": [
+    "FR1.1", "FR1.2",
+    "FR2.1", "FR2.2", "FR2.3", "FR2.4",
+    "FR3.1", "FR3.2", "FR3.3", "FR3.4", "FR3.5",
+    "FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5", "FR4.6",
+    "FR5.1", "FR5.2", "FR5.3", "FR5.4",
+    "FR6.1", "FR6.2", "FR6.3",
+    "NFR1", "NFR2", "NFR3", "NFR4", "NFR5"
+  ],
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "CliApp" },
+    { "id": "FR1.2", "status": "OK", "target": "CliApp" },
+    { "id": "FR2.1", "status": "OK", "target": "CliApp" },
+    { "id": "FR2.2", "status": "OK", "target": "CliApp" },
+    { "id": "FR2.3", "status": "OK", "target": "CliApp" },
+    { "id": "FR2.4", "status": "OK", "target": "CliApp" },
+    { "id": "FR3.1", "status": "OK", "target": "CliApp" },
+    { "id": "FR3.2", "status": "OK", "target": "CliApp" },
+    { "id": "FR3.3", "status": "OK", "target": "ExecutionEngine" },
+    { "id": "FR3.4", "status": "OK", "target": "CliApp" },
+    { "id": "FR3.5", "status": "OK", "target": "CliApp" },
+    { "id": "FR4.1", "status": "OK", "target": "AuditReader" },
+    { "id": "FR4.2", "status": "OK", "target": "AuditReader" },
+    { "id": "FR4.3", "status": "OK", "target": "OutputFormatter" },
+    { "id": "FR4.4", "status": "OK", "target": "AuditReader" },
+    { "id": "FR4.5", "status": "OK", "target": "AuditReader" },
+    { "id": "FR4.6", "status": "OK", "target": "AuditReader" },
+    { "id": "FR5.1", "status": "OK", "target": "IdentityVerifier" },
+    { "id": "FR5.2", "status": "OK", "target": "ExecutionEngine" },
+    { "id": "FR5.3", "status": "OK", "target": "LogGroupScanner" },
+    { "id": "FR5.4", "status": "OK", "target": "CredentialProvider" },
+    { "id": "FR6.1", "status": "OK", "target": "CliApp" },
+    { "id": "FR6.2", "status": "N/A", "target": "ドキュメント成果物(README/CHANGELOG)であり、コンポーネント/エンティティで表現される対象ではない" },
+    { "id": "FR6.3", "status": "N/A", "target": "Cargo.tomlのバージョン番号であり、コンポーネント/エンティティで表現される対象ではない" },
+    { "id": "NFR1", "status": "OK", "target": "CliApp" },
+    { "id": "NFR2", "status": "OK", "target": "AuditReader" },
+    { "id": "NFR3", "status": "OK", "target": "AuditReader" },
+    { "id": "NFR4", "status": "Deferred", "target": "nfr-requirements" },
+    { "id": "NFR5", "status": "OK", "target": "ExecutionEngine, CredentialProvider" }
+  ]
+}
