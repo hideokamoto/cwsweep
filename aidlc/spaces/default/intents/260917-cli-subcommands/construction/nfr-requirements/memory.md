@@ -3,6 +3,7 @@
 
 ## Interpretations
 <!-- example: 2026-05-29T10:14:32Z — chose REST over GraphQL; the consuming team only needs CRUD, revisit if subscriptions land -->
+- 2026-09-18T21:18:08Z — 別セッションからの引き継ぎ: redo-jump後の新試行でaudit-readerのNFR要件成果物は内容を変えずに再利用（Keep）し、要約確認を人間に取り直してから助言レビューを再ディスパッチした; 根拠は監査ログ上の人間の指示「内容は変更せずレシート記録のみ行う」。
 2026-09-18T02:22:09Z — audit-reader unit: no per-topic questions generated (Construction depth guidance: minimal, exceptional-only); everything needed was already fixed by unit-of-work.md's NFR2/NFR3 assignment and functional-design's rules.md. Only a single consolidated confirmation was used.
 
 ## Deviations
