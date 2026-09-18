@@ -3,6 +3,7 @@
 
 ## Interpretations
 <!-- example: 2026-05-29T10:14:32Z — chose REST over GraphQL; the consuming team only needs CRUD, revisit if subscriptions land -->
+- 2026-09-18T21:26:14Z — 別セッションからの引き継ぎ: redo-jump後の新試行でaudit-readerのNFR設計成果物は内容を変えずに再利用（Keep）し、要約確認を人間に取り直してから助言レビューを再ディスパッチした。
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->

@@ -29,7 +29,7 @@
 ## Execution Plan Summary
 - **Total Stages**: 26
 - **Completed**: 10
-- **In Progress**: functional-design
+- **In Progress**: nfr-design
 
 ## Runtime State
 - **Revision Count**: 7
@@ -43,6 +43,8 @@
 - **Unit Gate Rhythm**: unit-end
 
 - **Skeleton Stance**: off
+
+
 
 
 
@@ -104,8 +106,8 @@
 ### CONSTRUCTION PHASE
 Per unit: [TBD]
 - [-] functional-design — EXECUTE
-- [ ] nfr-requirements — EXECUTE
-- [ ] nfr-design — EXECUTE
+- [-] nfr-requirements — EXECUTE
+- [-] nfr-design — EXECUTE
 - [ ] infrastructure-design — EXECUTE
 - [-] code-generation — EXECUTE
 - [ ] build-and-test — EXECUTE
@@ -124,16 +126,16 @@ Per unit: [TBD]
 <!-- Derived, engine-owned projection; routing ignores hand edits. -->
 | unit | owner | functional-design | nfr-requirements | nfr-design | infrastructure-design | code-generation | gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| audit-reader | - | [x] | [ ] | [ ] | [ ] | [x] | [-] |
+| audit-reader | - | [x] | [x] | [ ] | [ ] | [x] | [-] |
 | cli-foundation | - | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 | release-docs | - | [x] | [ ] | [ ] | [ ] | [ ] | [-] |
 
 ## Current Status
 - **Lifecycle Phase**: CONSTRUCTION
-- **Current Stage**: functional-design
+- **Current Stage**: nfr-design
 - **Next Stage**: nfr-requirements
 - **Status**: Running
-- **Last Updated**: 2026-09-18T15:58:42Z
+- **Last Updated**: 2026-09-18T21:26:14Z
 
 ## Session Resume Point
 - **Last Completed Stage**: delivery-planning
