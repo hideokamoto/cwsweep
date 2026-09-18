@@ -34,6 +34,12 @@
 ## Runtime State
 - **Revision Count**: 3
 
+- **Construction Iteration**: unit-major
+
+- **Parked**: 2026-09-18T01:41:29Z
+
+- **Parked At Stage**: delivery-planning
+
 ## Phase Progress
 <!-- Status values: Pending, Active, Verified, Skipped -->
 
@@ -95,7 +101,7 @@ Per unit: [TBD]
 - **Current Stage**: delivery-planning
 - **Next Stage**: functional-design
 - **Status**: Running
-- **Last Updated**: 2026-09-18T01:16:10Z
+- **Last Updated**: 2026-09-18T01:41:29Z
 
 ## Session Resume Point
 - **Last Completed Stage**: contract-design
