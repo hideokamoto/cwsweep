@@ -548,11 +548,24 @@ function lastFlagValue(args: string[], flag: string): string | null {
 
 function isNativePlanApprovalPrerequisite(name: string, args: string[]): boolean {
   const command = name.toLowerCase();
-  if (command !== "aidlc" && command !== "aidlc.exe") return false;
+  return (
+    (command === "aidlc" || command === "aidlc.exe") &&
+    isPlanApprovalPrerequisite(args)
+  );
+}
+
+function isPlanApprovalPrerequisite(args: string[]): boolean {
   if (args[0] !== "engine") return false;
 
   const noun = args[1];
   const verb = args[2];
+  // The conductor re-enters through next on each human turn, and continue
+  // delivers the remaining stage rules. Requiring approval for that transport
+  // traps installations before they can finish presenting or answering it.
+  // Lifecycle reports and generation remain subject to the approval guard.
+  if (noun === "orchestrate" && (verb === "next" || verb === "continue")) {
+    return true;
+  }
   if (
     noun === "testing-posture" &&
     ["resolve", "render", "fingerprint", "verify"].includes(verb)
@@ -595,6 +608,7 @@ function isFrameworkToolInvocation(
   args: string[],
   executableResolutionChanged = false,
   dataDriven = false,
+  wrapped = false,
 ): boolean {
   if (isNativePlanApprovalPrerequisite(name, args)) {
     return !executableResolutionChanged && !dataDriven;
@@ -618,9 +632,26 @@ function isFrameworkToolInvocation(
   const projectLexical = resolve(projectDir);
   const absolute = isAbsolute(script) ? resolve(script) : resolve(cwd, script);
   const trustedToolsDir = resolve(projectLexical, harnessDir(), "tools");
+  const unifiedEntryPoint = basename(absolute) === "aidlc.ts";
   if (
     dirname(absolute) !== trustedToolsDir ||
-    !/^aidlc-[A-Za-z0-9._-]+\.ts$/.test(basename(absolute))
+    (!unifiedEntryPoint && !/^aidlc-[A-Za-z0-9._-]+\.ts$/.test(basename(absolute)))
+  ) {
+    return false;
+  }
+  // The installed Bun entry point dispatches both planning and mutation routes.
+  // Give it the native planning exceptions only, after checking the interpreter
+  // and arguments. Wrappers may change cwd after parsing, so require a direct
+  // invocation. The same real-file/no-symlink boundary below still applies.
+  if (
+    unifiedEntryPoint &&
+    (
+      !["bun", "bun.exe"].includes(name.toLowerCase()) ||
+      wrapped ||
+      executableResolutionChanged ||
+      dataDriven ||
+      !isPlanApprovalPrerequisite(args.slice(scriptIndex + 1))
+    )
   ) {
     return false;
   }
@@ -643,6 +674,7 @@ function shellInvocationNeedsApproval(
     name: string;
     args: string[];
     executable?: string;
+    launchers?: string[];
     dataDriven?: boolean;
     executableResolutionChanged?: boolean;
   },
@@ -681,6 +713,7 @@ function shellInvocationNeedsApproval(
       invocation.args,
       invocation.executableResolutionChanged,
       invocation.dataDriven,
+      (invocation.launchers?.length ?? 0) > 0,
     )
   ) {
     return false;
