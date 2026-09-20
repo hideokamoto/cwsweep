@@ -38,3 +38,8 @@ tempfile = "3"
 
 [profile.release]
 opt-level = 3
+
+# aws-sdk-ec2 など巨大な依存クレートのデバッグ情報を省いて、デバッグビルドの
+# メモリ使用量を抑える（自クレートのデバッグ情報は既定のまま）。
+[profile.dev.package."*"]
+debug = false
