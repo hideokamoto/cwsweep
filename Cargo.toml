@@ -18,7 +18,7 @@ aws-config = { version = "1", default-features = false, features = ["default-htt
 aws-sdk-organizations = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-sts = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-cloudwatchlogs = { version = "1", default-features = false, features = ["rt-tokio"] }
-aws-sdk-ec2 = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-sdk-account = { version = "1", default-features = false, features = ["rt-tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 clap = { version = "4", features = ["derive"] }
 inquire = "0.7"
@@ -39,7 +39,7 @@ tempfile = "3"
 [profile.release]
 opt-level = 3
 
-# aws-sdk-ec2 など巨大な依存クレートのデバッグ情報を省いて、デバッグビルドの
+# AWS SDK など大きな依存クレートのデバッグ情報を省いて、デバッグビルドの
 # メモリ使用量を抑える（自クレートのデバッグ情報は既定のまま）。
 [profile.dev.package."*"]
 debug = false

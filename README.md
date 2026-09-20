@@ -24,7 +24,7 @@ cwsweep scan --regions us-east-1 --role-name CustomOrgRole
 # 対象リージョン数を標準エラーへ表示し、TTYでは実行前に確認を求める
 cwsweep scan --regions all
 
-# --regions を省略すると、TTYでは ec2:describe-regions の結果からマルチセレクトで選択する。
+# --regions を省略すると、TTYでは account:ListRegions の結果からマルチセレクトで選択する。
 # 非TTY（CI/パイプ）ではAWSへ接続せずエラー終了する
 cwsweep scan
 ```
@@ -34,7 +34,7 @@ cwsweep scan
 | 指定 | 挙動 |
 |---|---|
 | `--regions us-east-1,ap-northeast-1` | 指定したリージョンのみを対象にする |
-| `--regions all`（`ALL` / `All` も可） | 管理アカウントの資格情報で `ec2:describe-regions` を呼び、商用パーティション（`aws`）の全リージョンを対象にする。GovCloud・中国リージョンは除外。件数と一覧を標準エラーへ表示し、TTYでは確認（既定: No）を取る |
+| `--regions all`（`ALL` / `All` も可） | 管理アカウントの資格情報で `account:ListRegions` を呼び、商用パーティション（`aws`）で有効化済みの全リージョンを対象にする。GovCloud・中国リージョン、未有効化のオプトインリージョンは除外。件数と一覧を標準エラーへ表示し、TTYでは確認（既定: No）を取る |
 | 未指定・TTY | 同じ列挙結果から対話式マルチセレクトで選択する。0件選択はエラー |
 | 未指定・非TTY | 「`--regions` を指定してください」というエラーで終了する（AWSへは接続しない） |
 
