@@ -14,7 +14,7 @@ name = "cwsweep"
 path = "src/lib.rs"
 
 [dependencies]
-aws-config = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio", "credentials-process", "sso"] }
+aws-config = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio", "credentials-process", "credentials-login", "sso"] }
 aws-sdk-organizations = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-sts = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-cloudwatchlogs = { version = "1", default-features = false, features = ["rt-tokio"] }
