@@ -1,6 +1,6 @@
 [package]
 name = "cwsweep"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI"
 license = "MIT"

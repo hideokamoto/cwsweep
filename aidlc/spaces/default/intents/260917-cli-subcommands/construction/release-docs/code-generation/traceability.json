@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "release-docs",
+  "upstream_ids": ["FR6.1", "FR6.2", "FR6.3", "NFR4.1", "NFR5.1", "NFR5.2", "NFR5.3"],
+  "coverage": [
+    { "id": "FR6.1", "status": "OK", "target": "README.md" },
+    { "id": "FR6.2", "status": "OK", "target": "CHANGELOG.md" },
+    { "id": "FR6.3", "status": "OK", "target": "Cargo.toml" },
+    { "id": "NFR4.1", "status": "OK", "target": "README.md" },
+    { "id": "NFR5.1", "status": "OK", "target": "README.md" },
+    { "id": "NFR5.2", "status": "OK", "target": "README.md" },
+    { "id": "NFR5.3", "status": "OK", "target": "Cargo.toml" }
+  ]
+}

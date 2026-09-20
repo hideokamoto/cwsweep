@@ -1,0 +1,8 @@
+{
+  "stage": "code-generation",
+  "unit": "audit-reader",
+  "version": 1,
+  "writes": [
+    { "path": "src/audit.rs" }
+  ]
+}

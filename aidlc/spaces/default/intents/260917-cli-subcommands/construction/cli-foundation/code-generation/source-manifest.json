@@ -1,0 +1,10 @@
+{
+  "stage": "code-generation",
+  "unit": "cli-foundation",
+  "version": 1,
+  "writes": [
+    { "path": "src/cli.rs" },
+    { "path": "src/output.rs" },
+    { "path": "src/main.rs" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "cli-foundation",
+  "upstream_ids": ["NFR1", "NFR2", "NFR4", "NFR5"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "NFR5.1, NFR5.10, NFR5.11（lib 側テストで検証可能な配置; tech-stack-decisions.md TTY判定・テスト行）" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.3, NFR2.4" },
+    { "id": "NFR4", "status": "OK", "target": "NFR5.11" },
+    { "id": "NFR5", "status": "OK", "target": "NFR5.4, NFR5.5, NFR5.6, NFR5.7, NFR5.8, NFR5.9, NFR5.10, NFR5.12, NFR5.13, NFR5.14, NFR5.15, NFR5.16, NFR5.17, NFR5.18" }
+  ]
+}

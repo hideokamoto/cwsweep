@@ -4,6 +4,8 @@ use comfy_table::{presets::UTF8_FULL, Table};
 use serde::Serialize;
 
 use crate::aggregator::{LogGroupRecord, ScanAggregator};
+use crate::audit::{AuditEventKind, AuditReadEntry};
+use crate::planner::ActionKind;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum OutputFormat {
@@ -69,6 +71,57 @@ impl OutputFormatter {
         // 万一失敗した場合でもpanicせずフォールバック文字列を返す。
         serde_json::to_string_pretty(&report)
             .unwrap_or_else(|e| format!("{{\"error\": \"json serialization failed: {e}\"}}"))
+    }
+
+    /// 監査ログエントリを指定フォーマットで整形する（記録順を保持、絞り込みなし）。
+    /// table は `run_id` を除く8列、json は全フィールドの配列（Contract 2）。
+    pub fn format_audit(entries: &[AuditReadEntry], format: OutputFormat) -> String {
+        match format {
+            OutputFormat::Table => Self::format_audit_table(entries),
+            OutputFormat::Json => serde_json::to_string_pretty(entries)
+                .unwrap_or_else(|e| format!("{{\"error\": \"json serialization failed: {e}\"}}")),
+        }
+    }
+
+    fn format_audit_table(entries: &[AuditReadEntry]) -> String {
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL);
+        table.set_header(vec![
+            "Timestamp",
+            "Event",
+            "Account ID",
+            "Region",
+            "Log Group",
+            "Action",
+            "Success",
+            "Error",
+        ]);
+        for entry in entries {
+            let action = match entry.action_kind {
+                ActionKind::Delete => "Delete".to_string(),
+                ActionKind::SetRetention { days } => format!("SetRetention({days}d)"),
+            };
+            // intent 行の success は結果未確定のプレースホルダなので "-" と表示する。
+            let success = match entry.event {
+                AuditEventKind::Intent => "-".to_string(),
+                AuditEventKind::Result => entry.success.to_string(),
+            };
+            let event = match entry.event {
+                AuditEventKind::Intent => "intent",
+                AuditEventKind::Result => "result",
+            };
+            table.add_row(vec![
+                entry.timestamp.clone(),
+                event.to_string(),
+                entry.account_id.clone(),
+                entry.region.clone(),
+                entry.log_group_name.clone(),
+                action,
+                success,
+                entry.error_message.clone().unwrap_or_default(),
+            ]);
+        }
+        format!("{table}\nTotal: {} audit entry(ies)", entries.len())
     }
 }
 
@@ -146,5 +199,44 @@ mod tests {
     #[test]
     fn default_output_format_is_table() {
         assert_eq!(OutputFormat::default(), OutputFormat::Table);
+    }
+
+    fn audit_entry(event: AuditEventKind, success: bool) -> AuditReadEntry {
+        AuditReadEntry {
+            run_id: "run-1".to_string(),
+            timestamp: "2026-01-01T00:00:00Z".to_string(),
+            account_id: "111111111111".to_string(),
+            region: "us-east-1".to_string(),
+            log_group_name: "/aws/lambda/foo".to_string(),
+            action_kind: ActionKind::SetRetention { days: 30 },
+            event,
+            success,
+            error_message: None,
+        }
+    }
+
+    #[test]
+    fn audit_table_hides_run_id_and_marks_intent_success_as_undetermined() {
+        let entries = vec![
+            audit_entry(AuditEventKind::Intent, false),
+            audit_entry(AuditEventKind::Result, true),
+        ];
+        let out = OutputFormatter::format_audit(&entries, OutputFormat::Table);
+
+        assert!(!out.contains("run-1"));
+        assert!(out.contains("SetRetention(30d)"));
+        assert!(out.contains("intent"));
+        assert!(out.contains("Total: 2 audit entry(ies)"));
+    }
+
+    #[test]
+    fn audit_json_is_an_array_with_every_field() {
+        let entries = vec![audit_entry(AuditEventKind::Result, true)];
+        let out = OutputFormatter::format_audit(&entries, OutputFormat::Json);
+        let parsed: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+        assert_eq!(parsed.as_array().unwrap().len(), 1);
+        assert_eq!(parsed[0]["run_id"], "run-1");
+        assert_eq!(parsed[0]["success"], true);
     }
 }
