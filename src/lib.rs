@@ -21,5 +21,6 @@ pub mod identity;
 pub mod org_discovery;
 pub mod output;
 pub mod planner;
+pub mod regions;
 pub mod scanner;
 pub mod selector;

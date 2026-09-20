@@ -18,6 +18,7 @@ aws-config = { version = "1", default-features = false, features = ["default-htt
 aws-sdk-organizations = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-sts = { version = "1", default-features = false, features = ["rt-tokio"] }
 aws-sdk-cloudwatchlogs = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-sdk-ec2 = { version = "1", default-features = false, features = ["rt-tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 clap = { version = "4", features = ["derive"] }
 inquire = "0.7"

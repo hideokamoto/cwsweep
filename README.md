@@ -19,7 +19,24 @@ cwsweep scan --regions us-east-1 --output json
 
 # メンバーアカウントへAssumeRoleする際のロール名を上書きする（既定: OrganizationAccountAccessRole）
 cwsweep scan --regions us-east-1 --role-name CustomOrgRole
+
+# 商用パーティションの全リージョンを対象にする（大文字小文字は区別しない）。
+# 対象リージョン数を標準エラーへ表示し、TTYでは実行前に確認を求める
+cwsweep scan --regions all
+
+# --regions を省略すると、TTYでは ec2:describe-regions の結果からマルチセレクトで選択する。
+# 非TTY（CI/パイプ）ではAWSへ接続せずエラー終了する
+cwsweep scan
 ```
+
+### リージョンの指定方法
+
+| 指定 | 挙動 |
+|---|---|
+| `--regions us-east-1,ap-northeast-1` | 指定したリージョンのみを対象にする |
+| `--regions all`（`ALL` / `All` も可） | 管理アカウントの資格情報で `ec2:describe-regions` を呼び、商用パーティション（`aws`）の全リージョンを対象にする。GovCloud・中国リージョンは除外。件数と一覧を標準エラーへ表示し、TTYでは確認（既定: No）を取る |
+| 未指定・TTY | 同じ列挙結果から対話式マルチセレクトで選択する。0件選択はエラー |
+| 未指定・非TTY | 「`--regions` を指定してください」というエラーで終了する（AWSへは接続しない） |
 
 ### clean — 対話式に選択して削除・retention変更
 
@@ -54,7 +71,9 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
 
 ### 安全機構
 
-- `scan` / `clean` の `--regions` は必須。全リージョン自動列挙のフォールバックは存在しない
+- `--regions` を省略した場合、暗黙に全リージョンをスキャンすることはない。TTYでは対話式に
+  選択させ、非TTY（CI/パイプ）ではエラー終了する。全リージョンを対象にするには `--regions all`
+  を明示する必要があり、その場合も対象件数を表示してTTYでは確認を取る
   （誤って無関係なリージョンをスキャンする事故を防ぐため）。
 - `clean --execute` を渡さない限り、`delete-log-group` / `put-retention-policy` は一切呼び出さ
   れない（dry-run既定）。`scan` と `audit` はこれらのAPIに到達する経路を持たない。
