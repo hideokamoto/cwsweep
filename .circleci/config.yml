@@ -15,8 +15,8 @@ executors:
   rust-executor:
     docker:
       - image: cimg/rust:1.98.1
-    # aws-sdk-ec2 のコンパイルは medium（4GB）・large（8GB）では OOM で SIGKILL されるため xlarge を使う
-    resource_class: xlarge
+    # aws-sdk-ec2 のコンパイルは medium（4GB）では OOM で SIGKILL されるため large を使う
+    resource_class: large
 
 commands:
   cargo-with-lock:
