@@ -77,6 +77,17 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
   「スキャンが全滅した」場合と「本当に対象ロググループが0件だった」場合を、
   呼び出し元が終了コードだけで区別できる。
 
+### トラブルシューティング
+
+- **`WARN profile [xxx] ignored; sections ... must have a prefix i.e. [profile my-profile]`**
+  `~/.aws/config` のセクション名が `[xxx]` になっている。AWS SDK は `default` 以外の
+  プロファイルに `profile` プレフィックスを要求するため、`[profile xxx]` に書き換える
+  （`~/.aws/credentials` 側は `[xxx]` のままでよい）。
+- **`ProfileFile provider could not be built: ... the credentials-login feature must be enabled`**
+  `aws login` で作成した `login_session_arn` 付きプロファイルは `aws-config` の
+  `credentials-login` フィーチャが必要。現行の `Cargo.toml` では有効化済みなので、
+  このエラーが出る場合は古いバイナリを使っている。最新ソースから再ビルド／再インストールする。
+
 ## v0.1 からの移行
 
 v0.2.0 でトップレベルのフラグ方式を廃止し、サブコマンド方式へ移行した。旧形式は互換
