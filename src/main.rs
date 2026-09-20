@@ -26,6 +26,10 @@ use cwsweep::execution::ActionApiOperations;
 use cwsweep::identity::{CallerIdentityOperations, IdentityCheck, IdentityVerifier};
 use cwsweep::org_discovery::{AccountInfo, AccountStatus, ListAccountsOperations, OrgDiscovery};
 use cwsweep::planner::ActionKind;
+use cwsweep::regions::{
+    region_spec, resolve_regions, ListRegionsError, ListRegionsOperations, RegionPrompt,
+    RegionResolveError, RegionSpec,
+};
 use cwsweep::scanner::{DescribeLogGroupsOperations, LogGroupPage, RawLogGroup};
 use cwsweep::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem, SelectorError};
 
@@ -105,6 +109,44 @@ fn organizations_client_for(creds: &AccountCredentials) -> aws_sdk_organizations
         .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
         .build();
     aws_sdk_organizations::Client::from_conf(config)
+}
+
+/// `ec2:describe-regions` はどのリージョンのエンドポイントでも全リージョンを返すため、
+/// STS / Organizations と同じく`GLOBAL_SERVICE_REGION`へ固定する。
+fn ec2_client_for(creds: &AccountCredentials) -> aws_sdk_ec2::Client {
+    let config = aws_sdk_ec2::Config::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .region(aws_sdk_ec2::config::Region::new(GLOBAL_SERVICE_REGION))
+        .credentials_provider(to_sdk_credentials(creds))
+        .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
+        .build();
+    aws_sdk_ec2::Client::from_conf(config)
+}
+
+/// `ec2:describe-regions` の実AWS SDK実装。オプトインリージョン（未有効化含む）も
+/// 列挙する。商用パーティションへの絞り込みは`cwsweep::regions`側で行う。
+struct Ec2DescribeRegionsAdapter {
+    client: aws_sdk_ec2::Client,
+}
+
+#[async_trait]
+impl ListRegionsOperations for Ec2DescribeRegionsAdapter {
+    async fn list_commercial_regions(&self) -> Result<Vec<String>, ListRegionsError> {
+        let output = self
+            .client
+            .describe_regions()
+            .all_regions(true)
+            .send()
+            .await
+            .map_err(|e| ListRegionsError {
+                message: sdk_error_message(&e),
+            })?;
+        Ok(output
+            .regions()
+            .iter()
+            .filter_map(|r| r.region_name().map(str::to_string))
+            .collect())
+    }
 }
 
 /// `sts:AssumeRole` の実AWS SDK実装。
@@ -330,6 +372,31 @@ impl MultiSelectPrompt for InquireMultiSelectPrompt {
     }
 }
 
+/// `inquire`ベースのリージョン選択・`all`確認UI実装。
+struct InquireRegionPrompt;
+
+impl RegionPrompt for InquireRegionPrompt {
+    fn confirm_all(&self, regions: &[String]) -> bool {
+        inquire::Confirm::new(&format!(
+            "商用リージョン {} 件をすべて対象にします。続行しますか？",
+            regions.len()
+        ))
+        .with_default(false)
+        .prompt()
+        .unwrap_or(false)
+    }
+
+    fn select(&self, regions: &[String]) -> Result<Vec<String>, String> {
+        // 初期状態は全チェックOFF（ロググループ選択と同じ安全不変条件）。
+        inquire::MultiSelect::new(
+            "--regions が未指定です。スキャン対象のリージョンを選択してください:",
+            regions.to_vec(),
+        )
+        .prompt()
+        .map_err(|e| e.to_string())
+    }
+}
+
 /// `inquire`ベースの実最終確認プロンプト実装。
 struct InquireConfirmPrompt {
     execute: bool,
@@ -415,11 +482,23 @@ struct AwsWiring {
     credential_provider: Arc<CredentialProvider>,
     identity: Arc<dyn IdentityCheck>,
     accounts: Vec<AccountInfo>,
+    regions: Vec<String>,
 }
 
-/// 管理アカウントのクレデンシャル解決 → Identity 取得 → Organization アカウント列挙。
+/// 管理アカウントのクレデンシャル解決 → Identity 取得 → リージョン解決 → Organization アカウント列挙。
 /// `audit` サブコマンドからは呼ばれない（AWS へ一切アクセスしない）。
-async fn wire_aws(role_name: &str) -> Result<AwsWiring, Box<dyn std::error::Error>> {
+async fn wire_aws(
+    role_name: &str,
+    regions: &[String],
+) -> Result<AwsWiring, Box<dyn std::error::Error>> {
+    let stdin_is_tty = std::io::stdin().is_terminal();
+    let spec = region_spec(regions);
+    // 非TTYで`--regions`未指定の場合は、AWSへ一切アクセスする前に失敗させる。
+    if spec == RegionSpec::Unspecified && !stdin_is_tty {
+        return Err(RegionResolveError::MissingInNonInteractive
+            .to_string()
+            .into());
+    }
     // `base_config`はクレデンシャル解決のみに用いる。各サービスクライアントは
     // `--regions`（CloudWatch Logs）または`GLOBAL_SERVICE_REGION`（STS / Organizations）
     // を明示するため、ここでの既定リージョン解決（IMDS問い合わせ等）は不要。
@@ -451,6 +530,19 @@ async fn wire_aws(role_name: &str) -> Result<AwsWiring, Box<dyn std::error::Erro
         account_id: management_account_id.clone(),
         ..management_credentials
     };
+
+    // リージョン解決（`all`の列挙・未指定時の対話式選択）は管理アカウントの
+    // 資格情報で行い、アカウント列挙より前に確定させる。
+    let regions = resolve_regions(
+        spec,
+        &Ec2DescribeRegionsAdapter {
+            client: ec2_client_for(&management_credentials),
+        },
+        stdin_is_tty,
+        &InquireRegionPrompt,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     let sts_client = sts_client_for(&management_credentials);
     let organizations_client = organizations_client_for(&management_credentials);
@@ -489,6 +581,7 @@ async fn wire_aws(role_name: &str) -> Result<AwsWiring, Box<dyn std::error::Erro
         credential_provider,
         identity,
         accounts,
+        regions,
     })
 }
 
@@ -515,14 +608,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Scan(args) => {
-            let wiring = wire_aws(&args.role_name).await?;
+            let wiring = wire_aws(&args.role_name, &args.regions).await?;
             let app = ScanApp {
                 credential_provider: wiring.credential_provider,
                 identity: wiring.identity,
                 logs_client: Arc::new(CloudWatchLogsAdapter),
             };
             let disposition = app
-                .run_scan(&wiring.accounts, &args.regions, args.output, &mut stdout)
+                .run_scan(&wiring.accounts, &wiring.regions, args.output, &mut stdout)
                 .await;
             exit_with(disposition)
         }
@@ -531,7 +624,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // project.md Mandatedにより設けない。
             let audit_logger: Arc<dyn AuditWrite> =
                 Arc::new(AuditLogger::open(&args.audit_log_path)?);
-            let wiring = wire_aws(&args.role_name).await?;
+            let wiring = wire_aws(&args.role_name, &args.regions).await?;
             let app = CliApp {
                 credential_provider: wiring.credential_provider,
                 identity: wiring.identity,
@@ -552,7 +645,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let disposition = app
                 .run_clean(
                     &wiring.accounts,
-                    &args.regions,
+                    &wiring.regions,
                     args.execute,
                     std::io::stdin().is_terminal(),
                     interaction,

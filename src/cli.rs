@@ -2,9 +2,9 @@
 //!
 //! CLI引数解析（`scan` / `clean` / `audit` サブコマンド）と、サブコマンドごとの
 //! ハンドラ（`run_scan` / `run_clean` / `run_audit`）を担う。
-//! security-design.md: `--regions`は必須引数とし、既定値・全リージョン自動列挙の
-//! フォールバックを持たせない。旧フラグ方式（`--scan-only`／トップレベル`--execute`）
-//! への互換エイリアスは提供しない（FR6.1）。
+//! `--regions`は明示リージョン・`all`（商用全リージョン）・未指定（TTYのみ対話式選択、
+//! 非TTYはエラー）を受け付ける。解決ロジックは`crate::regions`を参照。
+//! 旧フラグ方式（`--scan-only`／トップレベル`--execute`）への互換エイリアスは提供しない（FR6.1）。
 
 use std::io::Write;
 use std::sync::Arc;
@@ -48,8 +48,9 @@ pub enum Commands {
 
 #[derive(Args, Debug, Clone)]
 pub struct ScanArgs {
-    /// 対象リージョン（必須・複数指定可、カンマ区切りまたは複数回指定）。
-    #[arg(long, required = true, num_args = 1.., value_delimiter = ',')]
+    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
+    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
     /// メンバーアカウントへAssumeRoleする際のロール名。
@@ -63,8 +64,9 @@ pub struct ScanArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct CleanArgs {
-    /// 対象リージョン（必須・複数指定可、カンマ区切りまたは複数回指定）。
-    #[arg(long, required = true, num_args = 1.., value_delimiter = ',')]
+    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
+    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
     /// メンバーアカウントへAssumeRoleする際のロール名。
@@ -603,8 +605,30 @@ mod tests {
     // --- FR2: scan ---
 
     #[test]
-    fn scan_requires_regions() {
-        assert!(Cli::parse_from_args(["cwsweep", "scan"]).is_err());
+    fn scan_regions_is_optional_and_defaults_to_empty() {
+        let args = scan_args(Cli::parse_from_args(["cwsweep", "scan"]).unwrap());
+        assert!(args.regions.is_empty());
+        assert_eq!(
+            crate::regions::region_spec(&args.regions),
+            crate::regions::RegionSpec::Unspecified
+        );
+    }
+
+    #[test]
+    fn scan_regions_all_is_case_insensitive() {
+        for value in ["all", "ALL", "All"] {
+            let args =
+                scan_args(Cli::parse_from_args(["cwsweep", "scan", "--regions", value]).unwrap());
+            assert_eq!(
+                crate::regions::region_spec(&args.regions),
+                crate::regions::RegionSpec::All
+            );
+        }
+    }
+
+    #[test]
+    fn scan_regions_flag_without_value_is_a_parse_error() {
+        assert!(Cli::parse_from_args(["cwsweep", "scan", "--regions"]).is_err());
     }
 
     #[test]
@@ -670,8 +694,9 @@ mod tests {
     // --- FR3: clean ---
 
     #[test]
-    fn clean_requires_regions_and_dedupes() {
-        assert!(Cli::parse_from_args(["cwsweep", "clean"]).is_err());
+    fn clean_regions_is_optional_and_dedupes() {
+        let args = clean_args(Cli::parse_from_args(["cwsweep", "clean"]).unwrap());
+        assert!(args.regions.is_empty());
         let args =
             clean_args(Cli::parse_from_args(["cwsweep", "clean", "--regions", "a,b,a"]).unwrap());
         assert_eq!(args.regions, vec!["a", "b"]);
