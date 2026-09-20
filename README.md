@@ -5,50 +5,91 @@ AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択し�
 
 ## 使い方
 
+`cwsweep` は `scan` / `clean` / `audit` の3つのサブコマンドを持つ。サブコマンドを省略した
+呼び出しはエラーになる（旧フラグ形式との互換エイリアスは提供しない。後述の移行ガイドを参照）。
+
+### scan — 棚卸し（読み取り専用）
+
 ```bash
-# スキャンのみ（dry-run既定、削除・retention変更は一切実行されない）
-cwsweep --regions us-east-1,us-west-2
+# ロググループを表形式で表示して終了する（対話式の選択・確認へ進まない。監査ログも書かない）
+cwsweep scan --regions us-east-1,us-west-2
 
 # 出力フォーマットをJSONに切り替える（Cursor/Claude Code等のCLIエージェント向け）
-cwsweep --regions us-east-1 --output json
-
-# スキャン結果を出力して終了する（対話式の選択・確認へ進まない）。
-# 標準入力がTTYでない場合（パイプ・CI等）はフラグ無しでも同じ挙動になる。
-cwsweep --regions us-east-1 --output json --scan-only
+cwsweep scan --regions us-east-1 --output json
 
 # メンバーアカウントへAssumeRoleする際のロール名を上書きする（既定: OrganizationAccountAccessRole）
-cwsweep --regions us-east-1 --role-name CustomOrgRole
-
-# 実際に削除・retention変更を実行する（このフラグを明示的に渡さない限り絶対に実行されない）
-cwsweep --regions us-east-1 --execute
-
-# 監査ログの出力先を上書きする（既定値は後方互換のためカレントディレクトリ直下
-# cwsweep-audit.jsonl のまま。無効化するオプションは存在しない）
-cwsweep --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
+cwsweep scan --regions us-east-1 --role-name CustomOrgRole
 ```
 
-- `--regions` は必須。全リージョン自動列挙のフォールバックは存在しない（誤って無関係な
-  リージョンをスキャンする事故を防ぐため）。
-- `--execute` を渡さない限り、`delete-log-group` / `put-retention-policy` は一切呼び出されない
-  （dry-run既定）。
+### clean — 対話式に選択して削除・retention変更
+
+```bash
+# dry-run（既定）。スキャン → 対話式選択 → 確認までは進むが、削除・retention変更は一切実行されない
+cwsweep clean --regions us-east-1
+
+# 実際に削除・retention変更を実行する（このフラグを明示的に渡さない限り絶対に実行されない）
+cwsweep clean --regions us-east-1 --execute
+
+# 監査ログの出力先を上書きする（既定: カレントディレクトリ直下 cwsweep-audit.jsonl。
+# 無効化するオプションは存在しない）
+cwsweep clean --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
+```
+
+標準入力がTTYでない場合（パイプ・CI等）、`clean` はスキャン結果を表示したうえで
+「対話式選択に進めない」警告を出して正常終了する。非対話環境での棚卸しには `scan` を使う。
+
+### audit — 監査ログの閲覧（読み取り専用）
+
+```bash
+# 既定パス（cwsweep-audit.jsonl）の監査ログを表形式で全件表示する
+cwsweep audit
+
+# パスと出力フォーマットを指定する
+cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
+```
+
+`audit` はAWSに接続せず、監査ログを一切書き換えない。ファイルが存在しない場合は空の結果と
+して正常終了し、フォーマット不正な行は標準エラーへ警告を出してスキップする（前後の正常な
+エントリは表示される）。
+
+### 安全機構
+
+- `scan` / `clean` の `--regions` は必須。全リージョン自動列挙のフォールバックは存在しない
+  （誤って無関係なリージョンをスキャンする事故を防ぐため）。
+- `clean --execute` を渡さない限り、`delete-log-group` / `put-retention-policy` は一切呼び出さ
+  れない（dry-run既定）。`scan` と `audit` はこれらのAPIに到達する経路を持たない。
 - 対話式マルチセレクトの初期状態は常に全チェックOFF。
-- 削除・retention変更を伴う操作は、対象アカウントID・リージョン・ログループ名・実行時刻・
-  成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。
+- `clean` による削除・retention変更を伴う操作は、対象アカウントID・リージョン・ロググループ名・
+  実行時刻・成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。
   `--audit-log-path` で出力先を上書き可能）にJSON Linesで必ず記録する
   （無効化オプションなし）。監査ログの書き込みに失敗した場合、当該操作は中断される。
-  ファイルは最初の記録時に作成されるため、スキャンのみで終了した場合は作成されない。
+  監査ログファイルは `clean` 開始時にオープンされる（`scan` は作成しない）。
 - 管理アカウント自身へはAssumeRoleせず現在の認証情報をそのまま使用し、メンバーアカウントに
   対してのみAssumeRoleする。
 - いずれかのAWSアカウントへのAPI呼び出しの直前（スキャン時、および削除・retention変更の実行
   直前の二重目）に `sts:get-caller-identity` でアカウントID一致を検証し、不一致の場合は
   当該アカウントの処理を即座に失敗させる。
-- **終了コード方針（CI/自動化向け）**: 対象アカウント×リージョンの組み合わせが1件以上あり、
-  かつその全件でスキャンが失敗した場合、`cwsweep` は非ゼロ終了コードで終了する
-  （標準エラーへの警告ログに加え、この場合は正常な「削除対象0件」メッセージを表示しない）。
+- **終了コード方針（CI/自動化向け）**: `scan` / `clean` で対象アカウント×リージョンの組み合わせが
+  1件以上あり、かつその全件でスキャンが失敗した場合、`cwsweep` は非ゼロ終了コードで終了する
+  （標準エラーへの警告ログに加え、この場合は正常な「0件」メッセージを表示しない）。
   1件でも成功した組み合わせがあれば、他が失敗していても終了コードは0（正常終了）とし、
   失敗したアカウント/リージョンは個別に警告ログへ出力するのみとする。これにより
-  「スキャンが全滅した」場合と「本当に削除対象ロググループが0件だった」場合を、
+  「スキャンが全滅した」場合と「本当に対象ロググループが0件だった」場合を、
   呼び出し元が終了コードだけで区別できる。
+
+## v0.1 からの移行
+
+v0.2.0 でトップレベルのフラグ方式を廃止し、サブコマンド方式へ移行した。旧形式は互換
+エイリアスなしに clap の usage エラーとなる。
+
+| v0.1 | v0.2 |
+|---|---|
+| `cwsweep --regions R` | `cwsweep clean --regions R`（従来どおり対話へ進む）／ `cwsweep scan --regions R`（表示のみ） |
+| `cwsweep --regions R --scan-only` | `cwsweep scan --regions R` |
+| `cwsweep --regions R --output json` | `cwsweep scan --regions R --output json` |
+| `cwsweep --regions R --execute` | `cwsweep clean --regions R --execute` |
+| `cwsweep --regions R --audit-log-path P` | `cwsweep clean --regions R --audit-log-path P` |
+| （なし） | `cwsweep audit [--audit-log-path P] [--output json]` |
 
 ## スコープ制約
 

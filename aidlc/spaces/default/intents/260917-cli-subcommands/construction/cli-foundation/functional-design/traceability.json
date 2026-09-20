@@ -1,0 +1,31 @@
+{
+  "stage": "functional-design",
+  "unit": "cli-foundation",
+  "upstream_ids": ["FR1.1", "FR1.2", "FR2.1", "FR2.2", "FR2.3", "FR2.4", "FR3.1", "FR3.2", "FR3.3", "FR3.4", "FR3.5", "FR4.3", "FR5.1", "FR5.2", "FR5.3", "FR5.4", "FR6.1"],
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.2", "status": "OK", "target": "BR6.1" },
+    { "id": "FR2.1", "status": "OK", "target": "BR2.1, BR1.3" },
+    { "id": "FR2.2", "status": "OK", "target": "BR1.2, BR2.2" },
+    { "id": "FR2.3", "status": "OK", "target": "BR2.1" },
+    { "id": "FR2.4", "status": "OK", "target": "BR2.3" },
+    { "id": "FR3.1", "status": "OK", "target": "BR3.1, BR1.3" },
+    { "id": "FR3.2", "status": "OK", "target": "BR1.2" },
+    { "id": "FR3.3", "status": "OK", "target": "BR3.2" },
+    { "id": "FR3.4", "status": "OK", "target": "BR3.1" },
+    { "id": "FR3.5", "status": "OK", "target": "BR3.3" },
+    { "id": "FR4.3", "status": "OK", "target": "BR4.3" },
+    { "id": "FR5.1", "status": "OK", "target": "BR5.1" },
+    { "id": "FR5.2", "status": "OK", "target": "BR5.1" },
+    { "id": "FR5.3", "status": "OK", "target": "BR5.1" },
+    { "id": "FR5.4", "status": "OK", "target": "BR5.1" },
+    { "id": "FR6.1", "status": "OK", "target": "BR1.1, BR6.2" }
+  ],
+  "reverse": [
+    { "id": "BR2.4", "status": "N/A", "target": "本ステージ確認事項Q2（functional-design-questions.md）に基づく決定" },
+    { "id": "BR3.4", "status": "N/A", "target": "本ステージ確認事項Q1（functional-design-questions.md）に基づく決定" },
+    { "id": "BR4.1", "status": "N/A", "target": "FR4.1/FR4.2 は audit-reader Unit に割り当て済み。本Unitは呼び出し側の振る舞いとして再掲" },
+    { "id": "BR4.2", "status": "N/A", "target": "FR4.5/FR4.6 は audit-reader Unit に割り当て済み。本Unitは run_audit の依存制約として再掲" },
+    { "id": "BR4.4", "status": "N/A", "target": "Contract 1（contract-summary.md）の警告出力責務分担由来" }
+  ]
+}

@@ -5,5 +5,12 @@
     "dirName": "260910-cwsweep-cli",
     "scope": "cwsweep-orgwide-logs-cleanup",
     "status": "complete"
+  },
+  {
+    "uuid": "01a0acfe-9df7-7be5-8367-b537860ba118",
+    "slug": "cli-subcommands",
+    "dirName": "260917-cli-subcommands",
+    "scope": "classic",
+    "status": "complete"
   }
 ]

@@ -1,0 +1,12 @@
+{
+  "stage": "nfr-design",
+  "unit": "audit-reader",
+  "upstream_ids": ["NFR2.1", "NFR2.2", "NFR3.1", "NFR3.2", "NFR3.3"],
+  "coverage": [
+    { "id": "NFR2.1", "status": "OK", "target": "同一ファイル内の型レベル分離 + テキストベース静的回帰テスト" },
+    { "id": "NFR2.2", "status": "OK", "target": "AuditReadシグネチャに書き込み系型を含めない設計 + 静的回帰テスト" },
+    { "id": "NFR3.1", "status": "OK", "target": "行単位Result型ベース処理（パース失敗をSkippedLineへ変換）" },
+    { "id": "NFR3.2", "status": "OK", "target": "異常系分岐を明示的なコードパスとして設計（境界値テストの対象を明確化）" },
+    { "id": "NFR3.3", "status": "OK", "target": "読み取り専用ファイルオープン（書き込み・作成フラグ不使用）" }
+  ]
+}

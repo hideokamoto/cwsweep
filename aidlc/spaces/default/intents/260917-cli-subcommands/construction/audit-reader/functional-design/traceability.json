@@ -1,0 +1,20 @@
+{
+  "stage": "functional-design",
+  "unit": "audit-reader",
+  "upstream_ids": ["FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5", "FR4.6"],
+  "coverage": [
+    { "id": "FR4.1", "status": "OK", "target": "BR5.1" },
+    { "id": "FR4.2", "status": "OK", "target": "BR3.1" },
+    { "id": "FR4.3", "status": "Deferred", "target": "cli-foundation Unit の OutputFormatter が整形処理を実装する（本Unitはデータ供給のみ）" },
+    { "id": "FR4.4", "status": "OK", "target": "BR1.1" },
+    { "id": "FR4.5", "status": "OK", "target": "BR4.2" },
+    { "id": "FR4.6", "status": "OK", "target": "BR2.1" }
+  ],
+  "reverse": [
+    { "id": "BR1.2", "status": "N/A", "target": "AuditReadContract（contract-summary.md Contract 1）由来の技術的検証ルール" },
+    { "id": "BR2.2", "status": "N/A", "target": "AuditReadContract（contract-summary.md Contract 1）由来のI/Oエラー処理ルール" },
+    { "id": "BR3.2", "status": "N/A", "target": "components.md AuditEntry識別子仕様（記録順序で一意性を担保）由来の技術的ルール" },
+    { "id": "BR4.1", "status": "N/A", "target": "project.md Forbidden（audit経路の構造的分離）由来のルール" },
+    { "id": "BR5.2", "status": "N/A", "target": "本ステージ確認事項Q2（functional-design-questions.md）に基づく人間の決定" }
+  ]
+}

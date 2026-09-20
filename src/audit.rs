@@ -5,11 +5,12 @@
 //! project.md Mandated: 監査ログへの書き込みに失敗した場合、実行中の操作自体を中断し、エラーとして扱う。
 
 use std::fs::{File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::error::AuditWriteError;
 use crate::planner::ActionKind;
@@ -169,6 +170,169 @@ impl AuditLogger {
         Ok(())
     }
 }
+
+// `audit-reader` Unit（読み取り専用）。以下のマーカーに囲まれた型・トレイト・
+// 実装は、本ファイル冒頭で定義した書き込み側（`AuditWrite`/`AuditLogger`）
+// とは型レベルで分離された独立した領域である（domain-design Q2: 同一ファイル・
+// 型レベル分離方針）。
+//
+// project.md Forbidden: `audit`（監査ログ閲覧）サブコマンドのハンドラに、
+// `delete-log-group`/`put-retention-policy`を実行しうる型（`ExecutionEngine`、
+// および書き込み系の`AuditWrite`等）への依存を一切持たせない。マーカーで
+// 囲んだ領域の下のコードは`ExecutionEngine`・`AuditWrite`・`AuditLogger`への
+// `use`文・型参照を一切含まない（この宣言自体は識別子を挙げて説明するため
+// 意図的にマーカーの外側に置く。構造的検証は本モジュール末尾の
+// `audit_reader_module_has_no_execution_or_write_dependency` を参照）。
+// === AuditRead (read-only) region begin ===
+
+/// 監査ログ（JSON Lines）読み取り専用ビューにおける1行分のエントリ
+/// (entities.md `AuditEntry`)。
+///
+/// 本ファイル冒頭で定義される書き込み側のエントリ型とはフィールド構成が
+/// 同一（書き込み側が実際に出力する9フィールド構成をそのまま踏襲する）
+/// だが、型としては意図的に分離する。読み取り側の実装が書き込み側の型を
+/// `use`する経路自体を作らないための設計上の境界であり
+/// （security-design.md NFR2.1/NFR2.2）、型を共有すると、その型を経由した
+/// 間接的な依存関係が生まれうる。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuditReadEntry {
+    pub run_id: String,
+    pub timestamp: String,
+    pub account_id: String,
+    pub region: String,
+    pub log_group_name: String,
+    pub action_kind: ActionKind,
+    /// このエントリが実行意図(`Intent`)か結果(`Result`)かを示す。`audit`
+    /// サブコマンドはこの値で絞り込みを行わず、両方をそのまま表示する
+    /// (rules.md BR5.1)。
+    pub event: AuditEventKind,
+    /// `event == Intent`の場合は結果未確定のプレースホルダ値であり、
+    /// 失敗を意味しない（呼び出し元は`event`と併せて解釈する）。
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
+/// パース不能、または必須フィールドを1つ以上欠くために `AuditReadEntry` と
+/// して解釈できなかった監査ログの1行 (rules.md BR1.1/BR1.2)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkippedLine {
+    /// 監査ログファイル内の行番号（1始まり）。
+    pub line_number: usize,
+    /// スキップ理由（JSONパース失敗／必須フィールド欠落）を表す人間可読な文。
+    pub reason: String,
+}
+
+/// `AuditRead::entries()` 1回分の読み取り結果全体 (entities.md
+/// `AuditReadOutcome`)。対象ファイルが存在しない場合も、`entries`・
+/// `skipped_lines`とも空の正常なインスタンスとして返る (rules.md BR2.1)。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuditReadOutcome {
+    /// 監査ログファイルに記録された順序をそのまま保持する (rules.md BR3.2)。
+    pub entries: Vec<AuditReadEntry>,
+    /// ファイル中の出現順を保持する (rules.md BR3.2)。
+    pub skipped_lines: Vec<SkippedLine>,
+}
+
+/// `AuditRead::entries()` の失敗系。
+///
+/// `std::io::Error`は`Clone`/`Eq`を導出できないため、`src/error.rs`の他の
+/// エラー型と同様に直接ラップせず、メッセージ文字列を保持する`Io(String)`
+/// として表現する（advisory reviewのR-02指摘への対応）。
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub enum AuditReadError {
+    /// ファイル不在以外のI/Oエラー（権限不足、読み取り失敗等）
+    /// (rules.md BR2.2)。ファイル不在自体はエラーではない (BR2.1)。
+    #[error("failed to read audit log file: {0}")]
+    Io(String),
+}
+
+/// 監査ログ（JSON Lines）読み取り専用境界の抽象化 (rules.md BR4.2)。
+///
+/// 実装は削除・retention変更を実行しうる型、および監査ログ書き込み系の型
+/// （いずれも本ファイル冒頭で定義される）への依存を一切持たない。このシグ
+/// ネチャ自体が`&self`のみを要求し、書き込み・削除系の値への参照を要求し
+/// ないことが、この非依存性の主たる保証である（多層防御の一部としての
+/// 静的テストは本モジュール末尾を参照）。
+pub trait AuditRead {
+    fn entries(&self) -> Result<AuditReadOutcome, AuditReadError>;
+}
+
+/// 監査ログファイルを行単位でストリーミング読み取りする `AuditRead` 実装。
+///
+/// 読み取り専用でファイルを開き（`File::open`、書き込み・作成フラグ
+/// `OpenOptions::write`/`create`/`append`は一切使用しない）、いかなる
+/// 書き込みも行わない (rules.md BR4.1、NFR3.3)。
+pub struct AuditReader {
+    path: PathBuf,
+}
+
+impl AuditReader {
+    /// 読み取り対象の監査ログファイルパスを指定してリーダーを構築する。
+    /// この時点ではファイルへアクセスしない（`entries()`呼び出し時に初めて
+    /// 開く）。
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl AuditRead for AuditReader {
+    fn entries(&self) -> Result<AuditReadOutcome, AuditReadError> {
+        let file = match File::open(&self.path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // BR2.1: ファイル不在はエラーとせず、空の正常結果として扱う。
+                return Ok(AuditReadOutcome {
+                    entries: Vec::new(),
+                    skipped_lines: Vec::new(),
+                });
+            }
+            Err(e) => {
+                return Err(AuditReadError::Io(format!(
+                    "failed to open audit log file {}: {e}",
+                    self.path.display()
+                )));
+            }
+        };
+
+        let reader = BufReader::new(file);
+        let mut outcome = AuditReadOutcome {
+            entries: Vec::new(),
+            skipped_lines: Vec::new(),
+        };
+
+        for (index, line_result) in reader.lines().enumerate() {
+            let line_number = index + 1;
+            // ファイル不在以外のI/Oエラー（読み取り自体の失敗）は行単位の
+            // スキップ処理には進まず、直ちに呼び出し元へ伝播させる (BR2.2)。
+            let line = line_result.map_err(|e| {
+                AuditReadError::Io(format!(
+                    "failed to read audit log file {} at line {}: {e}",
+                    self.path.display(),
+                    line_number
+                ))
+            })?;
+
+            match serde_json::from_str::<AuditReadEntry>(&line) {
+                Ok(entry) => outcome.entries.push(entry),
+                Err(e) => {
+                    // BR1.1/BR1.2: パース失敗または必須フィールド欠落は
+                    // SkippedLineとして記録し、警告を出力した上で処理を継続
+                    // する（処理全体は中断しない）。
+                    let reason = e.to_string();
+                    eprintln!("warning: skipped malformed audit log line {line_number}: {reason}");
+                    outcome.skipped_lines.push(SkippedLine {
+                        line_number,
+                        reason,
+                    });
+                }
+            }
+        }
+
+        Ok(outcome)
+    }
+}
+
+// === AuditRead (read-only) region end ===
 
 #[cfg(test)]
 mod tests {
@@ -454,5 +618,209 @@ mod tests {
         let result = logger.append(&entry());
 
         assert!(result.is_err());
+    }
+}
+
+/// `audit-reader` Unit（読み取り専用）のテスト。既存の`mod tests`
+/// （`AuditLogger`書き込み側）とは意図的に別モジュールとする
+/// （code-generation-plan.md Step 1）。
+#[cfg(test)]
+mod audit_reader_tests {
+    use super::*;
+
+    fn write_lines(path: &Path, lines: &[&str]) {
+        let mut file = File::create(path).expect("failed to create fixture audit log file");
+        for line in lines {
+            writeln!(file, "{line}").expect("failed to write fixture audit log line");
+        }
+    }
+
+    fn sample_entry() -> AuditReadEntry {
+        AuditReadEntry {
+            run_id: "a1b2c3d4-0000-0000-0000-000000000000".to_string(),
+            timestamp: "2026-09-10T12:00:00Z".to_string(),
+            account_id: "111111111111".to_string(),
+            region: "us-east-1".to_string(),
+            log_group_name: "/aws/lambda/foo".to_string(),
+            action_kind: ActionKind::Delete,
+            event: AuditEventKind::Result,
+            success: true,
+            error_message: None,
+        }
+    }
+
+    // --- Step 2: データモデル層 (entities.md準拠) ---
+
+    #[test]
+    fn audit_read_entry_roundtrips_through_json() {
+        let entry = sample_entry();
+
+        let json = serde_json::to_string(&entry).expect("serialize should succeed");
+        let parsed: AuditReadEntry =
+            serde_json::from_str(&json).expect("deserialize should succeed");
+
+        assert_eq!(parsed, entry);
+    }
+
+    #[test]
+    fn audit_read_entry_deserialization_fails_when_required_field_missing() {
+        // `success`フィールド（必須8フィールドの1つ）を欠いたJSON。
+        let json = r#"{
+            "run_id": "r1",
+            "timestamp": "2026-09-10T12:00:00Z",
+            "account_id": "111111111111",
+            "region": "us-east-1",
+            "log_group_name": "/aws/lambda/foo",
+            "action_kind": "Delete",
+            "event": "result"
+        }"#;
+
+        let result: Result<AuditReadEntry, _> = serde_json::from_str(json);
+
+        assert!(result.is_err());
+    }
+
+    // --- Step 3: ビジネスロジック層 (rules.md準拠) ---
+
+    #[test]
+    fn entries_returns_empty_outcome_when_file_does_not_exist() {
+        // BR2.1
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("does-not-exist.jsonl");
+        let reader = AuditReader::new(path);
+
+        let outcome = reader.entries().expect("missing file must not be an error");
+
+        assert!(outcome.entries.is_empty());
+        assert!(outcome.skipped_lines.is_empty());
+    }
+
+    #[test]
+    fn entries_preserves_order_across_multiple_valid_lines() {
+        // BR3.2
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("audit.jsonl");
+        let mut first = sample_entry();
+        first.log_group_name = "/a".to_string();
+        let mut second = sample_entry();
+        second.log_group_name = "/b".to_string();
+        let mut third = sample_entry();
+        third.log_group_name = "/c".to_string();
+        write_lines(
+            &path,
+            &[
+                &serde_json::to_string(&first).expect("serialize should succeed"),
+                &serde_json::to_string(&second).expect("serialize should succeed"),
+                &serde_json::to_string(&third).expect("serialize should succeed"),
+            ],
+        );
+        let reader = AuditReader::new(path);
+
+        let outcome = reader.entries().expect("read should succeed");
+
+        assert_eq!(outcome.entries.len(), 3);
+        assert_eq!(outcome.entries[0].log_group_name, "/a");
+        assert_eq!(outcome.entries[1].log_group_name, "/b");
+        assert_eq!(outcome.entries[2].log_group_name, "/c");
+        assert!(outcome.skipped_lines.is_empty());
+    }
+
+    #[test]
+    fn entries_skips_malformed_line_and_continues_with_warning() {
+        // team.md Q7 / NFR3.1: (a)不正行はスキップされ警告出力、
+        // (b)不正行の前後の正常行は引き続きentriesに含まれる。
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("audit.jsonl");
+        let mut before = sample_entry();
+        before.log_group_name = "/before".to_string();
+        let mut after = sample_entry();
+        after.log_group_name = "/after".to_string();
+        write_lines(
+            &path,
+            &[
+                &serde_json::to_string(&before).expect("serialize should succeed"),
+                "{ this is not valid json",
+                &serde_json::to_string(&after).expect("serialize should succeed"),
+            ],
+        );
+        let reader = AuditReader::new(path);
+
+        let outcome = reader
+            .entries()
+            .expect("read should succeed despite bad line");
+
+        // (a) 不正行はSkippedLineとして記録される（警告は標準エラーへ出力
+        // 済みであり、ここではskipped_linesへの記録を検証する）。
+        assert_eq!(outcome.skipped_lines.len(), 1);
+        assert_eq!(outcome.skipped_lines[0].line_number, 2);
+        // (b) 不正行の前後の正常なエントリは引き続きentriesに含まれる。
+        assert_eq!(outcome.entries.len(), 2);
+        assert_eq!(outcome.entries[0].log_group_name, "/before");
+        assert_eq!(outcome.entries[1].log_group_name, "/after");
+    }
+
+    #[test]
+    fn entries_returns_io_error_when_path_is_not_a_regular_file() {
+        // BR2.2: パスがディレクトリの場合、ファイル不在ではないI/Oエラー
+        // として扱われる（読み取り時にEISDIR相当のエラーが発生する）。
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let reader = AuditReader::new(dir.path().to_path_buf());
+
+        let result = reader.entries();
+
+        assert!(matches!(result, Err(AuditReadError::Io(_))));
+    }
+
+    #[test]
+    fn entries_never_creates_or_writes_the_target_file() {
+        // BR4.1/NFR3.3: ファイル不在時に新規ファイルを作成しない
+        // （読み取り専用であり、いかなる書き込みも行わない）。
+        let dir = tempfile::tempdir().expect("failed to create temp dir");
+        let path = dir.path().join("does-not-exist.jsonl");
+        let reader = AuditReader::new(path.clone());
+
+        let outcome = reader.entries().expect("missing file must not be an error");
+
+        assert!(outcome.entries.is_empty());
+        assert!(
+            !path.exists(),
+            "AuditReader must not create the audit log file as a side effect"
+        );
+    }
+
+    // --- Step 4: 構造的分離の回帰テスト (NFR2.1/NFR2.2、security-design.md準拠) ---
+
+    /// `AuditReader`/`AuditRead`関連コードのソーステキストに`ExecutionEngine`・
+    /// `AuditWrite`・`AuditLogger`の識別子が一切出現しないことを検証する
+    /// テキストベースの静的回帰テスト。
+    ///
+    /// advisory review（nfr-design R-01）の指摘どおり、この検査はエイリアス
+    /// や間接参照までは検出できない**多層防御の一部**であり、単独で
+    /// 「コンパイル時点で到達不能」を証明するものではない。主たる保証は
+    /// `AuditRead::entries(&self)`のシグネチャ自体が`ExecutionEngine`/
+    /// `AuditWrite`への参照を要求しない設計であること、および型を共有しない
+    /// 設計であることにある。
+    #[test]
+    fn audit_reader_module_has_no_execution_or_write_dependency() {
+        let source_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/audit.rs");
+        let source = std::fs::read_to_string(source_path).expect("src/audit.rs must be readable");
+
+        const BEGIN_MARKER: &str = "// === AuditRead (read-only) region begin ===";
+        const END_MARKER: &str = "// === AuditRead (read-only) region end ===";
+        let start = source
+            .find(BEGIN_MARKER)
+            .expect("AuditRead region begin marker not found in src/audit.rs");
+        let end = source
+            .find(END_MARKER)
+            .expect("AuditRead region end marker not found in src/audit.rs");
+        assert!(start < end, "AuditRead region markers are out of order");
+        let region = &source[start..end];
+
+        for forbidden in ["ExecutionEngine", "AuditWrite", "AuditLogger"] {
+            assert!(
+                !region.contains(forbidden),
+                "AuditRead read-only region must not reference forbidden identifier: {forbidden}"
+            );
+        }
     }
 }

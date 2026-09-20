@@ -1,0 +1,27 @@
+{
+  "stage": "nfr-design",
+  "unit": "cli-foundation",
+  "upstream_ids": ["NFR2.3", "NFR2.4", "NFR5.1", "NFR5.2", "NFR5.3", "NFR5.4", "NFR5.5", "NFR5.6", "NFR5.7", "NFR5.8", "NFR5.9", "NFR5.10", "NFR5.11", "NFR5.12", "NFR5.13", "NFR5.14", "NFR5.15", "NFR5.16", "NFR5.17", "NFR5.18"],
+  "coverage": [
+    { "id": "NFR2.3", "status": "OK", "target": "D-SEC-1 run_audit シグネチャ限定" },
+    { "id": "NFR2.4", "status": "OK", "target": "D-SEC-1 ScanDeps + D-SEC-2 バリアント別 arg" },
+    { "id": "NFR5.1", "status": "OK", "target": "D-PERF-1" },
+    { "id": "NFR5.2", "status": "OK", "target": "D-PERF-2 scan_all 再利用" },
+    { "id": "NFR5.3", "status": "OK", "target": "D-PERF-3 1パス整形" },
+    { "id": "NFR5.4", "status": "OK", "target": "D-SEC-4 ExecutionEngine 再利用" },
+    { "id": "NFR5.5", "status": "OK", "target": "D-SEC-5" },
+    { "id": "NFR5.6", "status": "OK", "target": "D-SEC-2 + D-SEC-3 配線順序" },
+    { "id": "NFR5.7", "status": "OK", "target": "D-SCALE-1" },
+    { "id": "NFR5.8", "status": "OK", "target": "D-SCALE-2" },
+    { "id": "NFR5.9", "status": "OK", "target": "D-SCALE-3" },
+    { "id": "NFR5.10", "status": "OK", "target": "D-REL-1 ExitDisposition" },
+    { "id": "NFR5.11", "status": "OK", "target": "D-REL-2" },
+    { "id": "NFR5.12", "status": "OK", "target": "D-REL-3" },
+    { "id": "NFR5.13", "status": "OK", "target": "D-REL-4" },
+    { "id": "NFR5.14", "status": "OK", "target": "D-REL-5 stdin_is_tty 注入" },
+    { "id": "NFR5.15", "status": "OK", "target": "D-OBS-1" },
+    { "id": "NFR5.16", "status": "OK", "target": "D-OBS-2" },
+    { "id": "NFR5.17", "status": "OK", "target": "D-OBS-3" },
+    { "id": "NFR5.18", "status": "OK", "target": "D-OBS-4" }
+  ]
+}

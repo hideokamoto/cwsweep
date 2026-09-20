@@ -1,0 +1,11 @@
+{
+  "stage": "code-generation",
+  "unit": "release-docs",
+  "version": 1,
+  "writes": [
+    { "path": "README.md" },
+    { "path": "CHANGELOG.md" },
+    { "path": "Cargo.toml" },
+    { "path": "Cargo.lock" }
+  ]
+}

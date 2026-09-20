@@ -1,0 +1,11 @@
+{
+  "stage": "nfr-design",
+  "unit": "release-docs",
+  "upstream_ids": ["NFR4.1", "NFR5.1", "NFR5.2", "NFR5.3"],
+  "coverage": [
+    { "id": "NFR4.1", "status": "OK", "target": "D-SEC-1, D-SEC-2（security-design.md）" },
+    { "id": "NFR5.1", "status": "OK", "target": "D-SEC-1（security-design.md）" },
+    { "id": "NFR5.2", "status": "OK", "target": "D-SEC-1（security-design.md）" },
+    { "id": "NFR5.3", "status": "OK", "target": "D-SEC-3（security-design.md）" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "audit-reader",
+  "upstream_ids": ["NFR2.1", "NFR2.2", "NFR3.1", "NFR3.2", "NFR3.3"],
+  "coverage": [
+    { "id": "NFR2.1", "status": "OK", "target": "既存 test ジョブ（新規ジョブ不要、静的回帰テストを同ジョブで実行）" },
+    { "id": "NFR2.2", "status": "OK", "target": "既存 test ジョブ" },
+    { "id": "NFR3.1", "status": "OK", "target": "既存 test ジョブ" },
+    { "id": "NFR3.2", "status": "GAP", "target": "既存 coverage ジョブは単一グローバル閾値のみで、モジュール別100%floorを機械的に強制しない。Build and Testステージで検証手段を具体化する" },
+    { "id": "NFR3.3", "status": "OK", "target": "既存 test ジョブ" }
+  ]
+}

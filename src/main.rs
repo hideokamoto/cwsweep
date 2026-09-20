@@ -17,13 +17,12 @@ use secrecy::{ExposeSecret, SecretString};
 use uuid::Uuid;
 
 use aws_sdk_sts::config::ProvideCredentials;
-use cwsweep::aggregator::LogGroupRecord;
-use cwsweep::audit::{AuditLogger, AuditWrite};
-use cwsweep::cli::{Cli, CliApp};
+use cwsweep::audit::{AuditLogger, AuditReader, AuditWrite};
+use cwsweep::cli::{run_audit, CleanInteraction, Cli, CliApp, Commands, ExitDisposition, ScanApp};
 use cwsweep::confirmation::{ConfirmPrompt, ConfirmationPresenter, ConfirmationSummary};
 use cwsweep::credentials::{AccountCredentials, AssumeRoleOperations, CredentialProvider};
 use cwsweep::error::{AssumeRoleError, CallerIdentityCallError, OrgDiscoveryError};
-use cwsweep::execution::{ActionApiOperations, ExecutionOutcome};
+use cwsweep::execution::ActionApiOperations;
 use cwsweep::identity::{CallerIdentityOperations, IdentityCheck, IdentityVerifier};
 use cwsweep::org_discovery::{AccountInfo, AccountStatus, ListAccountsOperations, OrgDiscovery};
 use cwsweep::planner::ActionKind;
@@ -352,21 +351,6 @@ fn confirm_question(execute: bool) -> &'static str {
     }
 }
 
-fn format_outcome_line(outcome: &ExecutionOutcome) -> String {
-    let target = format!(
-        "{}/{}/{}",
-        outcome.action.account_id, outcome.action.region, outcome.action.log_group_name
-    );
-    if outcome.dry_run {
-        return format!("{target}: skipped (dry-run: --execute not supplied)");
-    }
-    match (&outcome.success, &outcome.error_message) {
-        (true, _) => format!("{target}: success"),
-        (false, Some(msg)) => format!("{target}: failed: {msg}"),
-        (false, None) => format!("{target}: failed"),
-    }
-}
-
 impl ConfirmPrompt for InquireConfirmPrompt {
     fn confirm(&self, summary: &ConfirmationSummary) -> bool {
         println!("実行モード: {}", execution_mode_label(self.execute));
@@ -426,16 +410,16 @@ fn action_kind_from_prompt() -> Result<ActionKind, String> {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
-        .init();
+/// scan / clean 共通の AWS 配線結果。
+struct AwsWiring {
+    credential_provider: Arc<CredentialProvider>,
+    identity: Arc<dyn IdentityCheck>,
+    accounts: Vec<AccountInfo>,
+}
 
-    let cli = Cli::parse_args();
-    let run_id = Uuid::new_v4().to_string();
-
+/// 管理アカウントのクレデンシャル解決 → Identity 取得 → Organization アカウント列挙。
+/// `audit` サブコマンドからは呼ばれない（AWS へ一切アクセスしない）。
+async fn wire_aws(role_name: &str) -> Result<AwsWiring, Box<dyn std::error::Error>> {
     // `base_config`はクレデンシャル解決のみに用いる。各サービスクライアントは
     // `--regions`（CloudWatch Logs）または`GLOBAL_SERVICE_REGION`（STS / Organizations）
     // を明示するため、ここでの既定リージョン解決（IMDS問い合わせ等）は不要。
@@ -474,7 +458,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(StsAssumeRoleAdapter { client: sts_client });
     let credential_provider = Arc::new(CredentialProvider::new(
         management_account_id.clone(),
-        cli.role_name.clone(),
+        role_name.to_string(),
         assume_role_client,
         management_credentials,
     ));
@@ -501,136 +485,92 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(err) => return Err(err.into()),
     };
 
-    // R-04: 監査ログ出力先は`--audit-log-path`で上書き可能（既定値は後方互換のため
-    // カレントディレクトリ直下`cwsweep-audit.jsonl`を維持）。無効化オプションは
-    // project.md Mandatedにより設けない。
-    let audit_logger: Arc<dyn AuditWrite> = Arc::new(AuditLogger::open(&cli.audit_log_path)?);
+    Ok(AwsWiring {
+        credential_provider,
+        identity,
+        accounts,
+    })
+}
 
-    let logs_adapter: Arc<dyn DescribeLogGroupsOperations> = Arc::new(CloudWatchLogsAdapter);
-    let api_adapter: Arc<dyn ActionApiOperations> = Arc::new(CloudWatchLogsAdapter);
+fn exit_with(disposition: ExitDisposition) -> Result<(), Box<dyn std::error::Error>> {
+    match disposition {
+        ExitDisposition::Success => Ok(()),
+        ExitDisposition::ScanFullyFailed { attempted } => Err(format!(
+            "全{attempted}件のアカウント×リージョンの組み合わせでスキャンに失敗しました。詳細は上記の警告ログを確認してください。"
+        )
+        .into()),
+        ExitDisposition::Error(message) => Err(message.into()),
+    }
+}
 
-    let app = CliApp {
-        credential_provider: credential_provider.clone(),
-        identity: identity.clone(),
-        logs_client: logs_adapter,
-        api_client: api_adapter,
-        audit_logger,
-        run_id,
-    };
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .init();
 
-    let (aggregator, outcomes) = app.scan_all(&accounts, &cli.regions).await;
-    for outcome in &outcomes {
-        if let cwsweep::cli::AccountRegionOutcome::Failed {
-            account_id,
-            region,
-            error,
-        } = outcome
-        {
-            tracing::warn!(account_id, region, %error, "scan failed for account/region");
+    let cli = Cli::parse_args();
+    let mut stdout = std::io::stdout();
+
+    match cli.command {
+        Commands::Scan(args) => {
+            let wiring = wire_aws(&args.role_name).await?;
+            let app = ScanApp {
+                credential_provider: wiring.credential_provider,
+                identity: wiring.identity,
+                logs_client: Arc::new(CloudWatchLogsAdapter),
+            };
+            let disposition = app
+                .run_scan(&wiring.accounts, &args.regions, args.output, &mut stdout)
+                .await;
+            exit_with(disposition)
+        }
+        Commands::Clean(args) => {
+            // 監査ログ出力先は最初にオープンする（フェイルクローズ）。無効化オプションは
+            // project.md Mandatedにより設けない。
+            let audit_logger: Arc<dyn AuditWrite> =
+                Arc::new(AuditLogger::open(&args.audit_log_path)?);
+            let wiring = wire_aws(&args.role_name).await?;
+            let app = CliApp {
+                credential_provider: wiring.credential_provider,
+                identity: wiring.identity,
+                logs_client: Arc::new(CloudWatchLogsAdapter),
+                api_client: Arc::new(CloudWatchLogsAdapter),
+                audit_logger,
+                run_id: Uuid::new_v4().to_string(),
+            };
+            let selector = InteractiveSelector::new(InquireMultiSelectPrompt);
+            let presenter = ConfirmationPresenter::new(InquireConfirmPrompt {
+                execute: args.execute,
+            });
+            let interaction = CleanInteraction {
+                selector: &selector,
+                presenter: &presenter,
+                choose_action: &action_kind_from_prompt,
+            };
+            let disposition = app
+                .run_clean(
+                    &wiring.accounts,
+                    &args.regions,
+                    args.execute,
+                    std::io::stdin().is_terminal(),
+                    interaction,
+                    &mut stdout,
+                )
+                .await;
+            exit_with(disposition)
+        }
+        Commands::Audit(args) => {
+            let reader = AuditReader::new(args.audit_log_path);
+            exit_with(run_audit(&reader, args.output, &mut stdout))
         }
     }
-
-    // R-03: 終了コード方針 — 対象アカウント×リージョンが1件以上あり、かつ全件が
-    // 失敗した場合のみ非ゼロ終了コードを返す。これにより、CI/自動化はスキャン
-    // 全滅と「本当に削除対象0件」を終了コードで区別できる。1件でも成功があれば
-    // 0（正常終了）とし、失敗したアカウント/リージョンは上記の`tracing::warn!`で
-    // 個別にログ出力済み（判定ロジックは`CliApp::scan_fully_failed`にありユニット
-    // テストで検証している）。
-    if CliApp::scan_fully_failed(&outcomes) {
-        return Err(format!(
-            "全{}件のアカウント×リージョンの組み合わせでスキャンに失敗しました。詳細は上記の警告ログを確認してください。",
-            outcomes.len()
-        )
-        .into());
-    }
-
-    println!("{}", CliApp::render_output(&aggregator, cli.output));
-
-    if aggregator.is_empty() {
-        println!("削除対象のロググループはありません。");
-        return Ok(());
-    }
-
-    if cli.scan_only {
-        return Ok(());
-    }
-    if !std::io::stdin().is_terminal() {
-        tracing::info!("stdin is not a TTY; skipping interactive selection (same as --scan-only)");
-        return Ok(());
-    }
-
-    let selector = InteractiveSelector::new(InquireMultiSelectPrompt);
-    let selected: Vec<LogGroupRecord> = CliApp::select(&aggregator, &selector)?;
-    if selected.is_empty() {
-        println!("選択されたロググループはありません。終了します。");
-        return Ok(());
-    }
-
-    let action_kind = action_kind_from_prompt()?;
-    let planned = CliApp::plan(&selected, action_kind)?;
-    let total_bytes: i64 = selected.iter().map(|r| r.stored_bytes).sum();
-
-    let presenter = ConfirmationPresenter::new(InquireConfirmPrompt {
-        execute: cli.execute,
-    });
-    let confirmed = CliApp::confirm(&presenter, &planned, total_bytes);
-    let Some(confirmed_actions) = confirmed else {
-        println!("確認が得られなかったため、処理を中止します。");
-        return Ok(());
-    };
-
-    let outcomes = app.execute(&confirmed_actions, cli.execute).await?;
-    for outcome in &outcomes {
-        println!("{}", format_outcome_line(outcome));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn outcome(success: bool, error_message: Option<&str>, dry_run: bool) -> ExecutionOutcome {
-        ExecutionOutcome {
-            action: cwsweep::planner::PlannedAction {
-                account_id: "111111111111".to_string(),
-                region: "us-east-1".to_string(),
-                log_group_name: "/a".to_string(),
-                action_kind: ActionKind::Delete,
-                confirmed: true,
-            },
-            success,
-            error_message: error_message.map(str::to_string),
-            dry_run,
-        }
-    }
-
-    #[test]
-    fn outcome_line_marks_dry_run_as_skipped_not_failed() {
-        let line = format_outcome_line(&outcome(
-            false,
-            Some("dry-run: --execute not supplied"),
-            true,
-        ));
-        assert_eq!(
-            line,
-            "111111111111/us-east-1//a: skipped (dry-run: --execute not supplied)"
-        );
-        assert!(!line.contains("success=false"));
-    }
-
-    #[test]
-    fn outcome_line_reports_success_and_failure_distinctly() {
-        assert_eq!(
-            format_outcome_line(&outcome(true, None, false)),
-            "111111111111/us-east-1//a: success"
-        );
-        assert_eq!(
-            format_outcome_line(&outcome(false, Some("boom"), false)),
-            "111111111111/us-east-1//a: failed: boom"
-        );
-    }
 
     #[test]
     fn confirmation_texts_distinguish_dry_run_from_execute() {
