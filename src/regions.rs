@@ -1,7 +1,7 @@
 //! `--regions` の解決ロジック。
 //!
 //! - `--regions all`（大文字小文字を区別しない）: 商用パーティション（`aws`）の全リージョンを
-//!   `ec2:describe-regions` で列挙して対象にする。TTYでは対象数を表示して確認を取る。
+//!   `account:ListRegions` で列挙して対象にする。TTYでは対象数を表示して確認を取る。
 //! - `--regions` 未指定: 標準入力がTTYなら全リージョン列挙結果から対話式に選択する。
 //!   非TTY（CI/パイプ）では明確なエラーで終了する。
 //!
@@ -42,12 +42,12 @@ pub fn is_commercial_region(name: &str) -> bool {
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
-#[error("describe-regions call failed: {message}")]
+#[error("account:ListRegions call failed: {message}")]
 pub struct ListRegionsError {
     pub message: String,
 }
 
-/// `ec2:describe-regions` を抽象化するトレイト。実装は商用パーティションのリージョン名を
+/// `account:ListRegions` を抽象化するトレイト。実装は商用パーティションのリージョン名を
 /// ソート済みで返す。
 #[async_trait]
 pub trait ListRegionsOperations: Send + Sync {
@@ -68,7 +68,7 @@ pub enum RegionResolveError {
         "--regions が指定されていません。CI/パイプ等の非対話環境では `--regions <region>[,<region>...]` または `--regions all` を明示してください。"
     )]
     MissingInNonInteractive,
-    #[error("describe-regions で列挙されたリージョンが0件でした")]
+    #[error("account:ListRegions で列挙されたリージョンが0件でした")]
     NoRegionsListed,
     #[error("リージョンが1件も選択されなかったため、処理を中止します")]
     NothingSelected,
@@ -83,7 +83,7 @@ pub enum RegionResolveError {
 /// `RegionSpec` を実際のスキャン対象リージョン一覧へ解決する。
 ///
 /// `Explicit` はAWSにも対話UIにも触れずそのまま返す。`Unspecified` かつ非TTYは、
-/// `describe-regions` を呼ぶ前にエラーで終了する。
+/// `account:ListRegions` を呼ぶ前にエラーで終了する。
 pub async fn resolve_regions(
     spec: RegionSpec,
     lister: &dyn ListRegionsOperations,

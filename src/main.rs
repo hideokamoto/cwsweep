@@ -13,6 +13,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use aws_config::retry::RetryConfig;
 use aws_config::BehaviorVersion;
+use aws_sdk_account::types::RegionOptStatus;
 use secrecy::{ExposeSecret, SecretString};
 use uuid::Uuid;
 
@@ -111,41 +112,48 @@ fn organizations_client_for(creds: &AccountCredentials) -> aws_sdk_organizations
     aws_sdk_organizations::Client::from_conf(config)
 }
 
-/// `ec2:describe-regions` はどのリージョンのエンドポイントでも全リージョンを返すため、
+/// AWS Account Management（`account:ListRegions`）はグローバルサービスであり、
 /// STS / Organizations と同じく`GLOBAL_SERVICE_REGION`へ固定する。
-fn ec2_client_for(creds: &AccountCredentials) -> aws_sdk_ec2::Client {
-    let config = aws_sdk_ec2::Config::builder()
+fn account_client_for(creds: &AccountCredentials) -> aws_sdk_account::Client {
+    let config = aws_sdk_account::Config::builder()
         .behavior_version(BehaviorVersion::latest())
-        .region(aws_sdk_ec2::config::Region::new(GLOBAL_SERVICE_REGION))
+        .region(aws_sdk_account::config::Region::new(GLOBAL_SERVICE_REGION))
         .credentials_provider(to_sdk_credentials(creds))
         .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
         .build();
-    aws_sdk_ec2::Client::from_conf(config)
+    aws_sdk_account::Client::from_conf(config)
 }
 
-/// `ec2:describe-regions` の実AWS SDK実装。オプトインリージョン（未有効化含む）も
-/// 列挙する。商用パーティションへの絞り込みは`cwsweep::regions`側で行う。
-struct Ec2DescribeRegionsAdapter {
-    client: aws_sdk_ec2::Client,
+/// `account:ListRegions` の実AWS SDK実装。呼び出し元アカウントで利用可能
+/// （`ENABLED` / `ENABLED_BY_DEFAULT`）なリージョンのみを列挙する。無効なオプトイン
+/// リージョンは CloudWatch Logs API 自体が呼べないため対象外とする。
+/// 商用パーティションへの絞り込みは`cwsweep::regions`側で行う。
+struct AccountListRegionsAdapter {
+    client: aws_sdk_account::Client,
 }
 
 #[async_trait]
-impl ListRegionsOperations for Ec2DescribeRegionsAdapter {
+impl ListRegionsOperations for AccountListRegionsAdapter {
     async fn list_commercial_regions(&self) -> Result<Vec<String>, ListRegionsError> {
-        let output = self
+        let mut pages = self
             .client
-            .describe_regions()
-            .all_regions(true)
-            .send()
-            .await
-            .map_err(|e| ListRegionsError {
+            .list_regions()
+            .region_opt_status_contains(RegionOptStatus::Enabled)
+            .region_opt_status_contains(RegionOptStatus::EnabledByDefault)
+            .into_paginator()
+            .send();
+        let mut names = Vec::new();
+        while let Some(page) = pages.next().await {
+            let page = page.map_err(|e| ListRegionsError {
                 message: sdk_error_message(&e),
             })?;
-        Ok(output
-            .regions()
-            .iter()
-            .filter_map(|r| r.region_name().map(str::to_string))
-            .collect())
+            names.extend(
+                page.regions()
+                    .iter()
+                    .filter_map(|r| r.region_name().map(str::to_string)),
+            );
+        }
+        Ok(names)
     }
 }
 
@@ -535,8 +543,8 @@ async fn wire_aws(
     // 資格情報で行い、アカウント列挙より前に確定させる。
     let regions = resolve_regions(
         spec,
-        &Ec2DescribeRegionsAdapter {
-            client: ec2_client_for(&management_credentials),
+        &AccountListRegionsAdapter {
+            client: account_client_for(&management_credentials),
         },
         stdin_is_tty,
         &InquireRegionPrompt,
