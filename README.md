@@ -160,26 +160,28 @@ cargo llvm-cov --lib --summary-only
 
 ## リリース
 
-`main` へのマージ自体はリリースをトリガーしない。バージョンタグ（`v1.2.3` 形式）を push
-すると、GitHub Releases へクロスプラットフォーム（Linux/macOS、x86_64/arm64）の
-リリースバイナリが添付される「タグ駆動リリース」方式を採用している。
+`Cargo.toml` の `version` を上げて **`main` へマージ/push する**と、GitHub Releases へ
+クロスプラットフォーム（Linux/macOS、x86_64/arm64）のリリースバイナリが添付される。
+バージョンタグ（`vX.Y.Z`）はこの push を起点にCI自身が算出・作成するため、**手動で
+`git tag` / `git push` する必要はない**。バージョンを上げていない通常のmainへの
+push では何もビルドされない（既にそのバージョンがリリース済みかを毎回判定し、
+未リリースの場合のみビルドする）。
 
 このビルド・添付処理は、このリポジトリの `.circleci/config.yml` には**含まれていない**。
 [hideokamoto/circleci-configurations](https://github.com/hideokamoto/circleci-configurations)
 の [`workflows/release/rust-github-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-release.yaml)
 を、CircleCI の [Config Sources 機能（複数パイプライン設定）](https://circleci.com/docs/guides/orchestrate/set-up-multiple-configuration-files-for-a-project/)
-で紐づけた、タグ push 起点の**別のパイプライン定義**として実行する
+で紐づけた、main push 起点の**別のパイプライン定義**として実行する
 （通常の fmt/clippy/test/coverage/audit/deny は、このリポジトリの `.circleci/config.yml`
-のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`GH_TOKEN`）は
+のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`circleci`）は
 そちらのリポジトリの `workflows/release/README.md` を参照。
 
 ```bash
-# バージョンを上げてコミット
+# バージョンを上げてコミット（CHANGELOG.md も更新する）
 cargo set-version 0.2.1  # または Cargo.toml を直接編集
 
-# タグを打って push（これがリリースパイプラインのトリガー）
-git tag v0.2.1
-git push origin v0.2.1
+# main へマージ/push する（これがリリースパイプラインのトリガー。
+# タグは CI が Cargo.toml の version から自動算出・作成する）
 ```
 
 ## AI-DLC Workflows v2
