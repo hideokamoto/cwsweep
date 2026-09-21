@@ -118,6 +118,22 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
   「スキャンが全滅した」場合と「本当に対象ロググループが0件だった」場合を、
   呼び出し元が終了コードだけで区別できる。
 
+### ログ出力・エラー表示
+
+- 致命的エラーが発生した場合、標準エラーへ `Error: <メッセージ>` を赤文字（TTY接続時のみ。
+  パイプ/リダイレクト時は色なし）の1行だけで表示する。AWS SDK内部のエラー型構造のダンプ等は
+  表示しない。
+- `--verbose`（`--debug` でも同義）を指定すると、AWS SDK / 内部クレートが出す詳細ログ
+  （認証プロバイダの解決過程など）を標準エラーへそのまま出力する。指定しない場合、これらの
+  生ログは抑制され、`cwsweep` 自身の警告のみが表示される。`--verbose` / `--debug` はサブコマンド
+  の前後どちらに置いても有効（例: `cwsweep scan --verbose` / `cwsweep --debug clean`）。
+- `RUST_LOG` 環境変数が設定されている場合は、`--verbose` の有無に関わらずそちらを優先する。
+
+```bash
+# 認証エラーの詳細を確認したい場合
+cwsweep scan --regions us-west-2 --verbose
+```
+
 ### トラブルシューティング
 
 - **`WARN profile [xxx] ignored; sections ... must have a prefix i.e. [profile my-profile]`**

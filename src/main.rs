@@ -607,17 +607,60 @@ fn exit_with(disposition: ExitDisposition) -> Result<(), Box<dyn std::error::Err
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// 標準エラーが端末であり、ANSIエスケープシーケンスを処理できるかを返す。
+/// WindowsではVT処理を有効化できた場合にのみ対応済みとみなす。
+fn stderr_supports_ansi() -> bool {
+    if !std::io::stderr().is_terminal() {
+        return false;
+    }
+
+    #[cfg(windows)]
+    {
+        anstyle_query::windows::enable_ansi_colors().unwrap_or(false)
+    }
+
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
+/// `--verbose`/`--debug`未指定時は、自クレート（`cwsweep`）自身の警告のみを標準エラーへ
+/// 出力し、`aws-config`等の外部クレートが出す生ログ（認証エラー時に大量に出るデバッグ
+/// 用の内部詳細）は抑制する。`RUST_LOG`が設定されている場合は常にそれを優先する。
+fn init_tracing(verbose: bool) {
+    let default_directives = if verbose {
+        "debug"
+    } else {
+        "error,cwsweep=warn"
+    };
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_directives));
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
+        .with_ansi(stderr_supports_ansi())
+        .with_env_filter(filter)
         .init();
+}
 
-    let cli = Cli::parse_args();
-    let mut stdout = std::io::stdout();
+/// 致命的エラーを赤文字1行のメッセージのみで標準エラーへ出力する。ソースチェーンは
+/// `sdk_error_message`と同じ要領で結合するが、Rust既定の`{:?}`（Debug）フォーマットが
+/// 出すような内部構造のダンプ（AWS SDKのエラー型ツリー等）は表示しない。
+fn print_fatal_error(err: &(dyn std::error::Error + 'static)) {
+    let message = sdk_error_message(err);
+    if stderr_supports_ansi() {
+        eprintln!("\x1b[31mError: {message}\x1b[0m");
+    } else {
+        eprintln!("Error: {message}");
+    }
+}
 
-    match cli.command {
+async fn run(
+    command: Commands,
+    stdout: &mut std::io::Stdout,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match command {
         Commands::Scan(args) => {
             let wiring = wire_aws(&args.role_name, &args.regions).await?;
             let app = ScanApp {
@@ -626,7 +669,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 logs_client: Arc::new(CloudWatchLogsAdapter),
             };
             let disposition = app
-                .run_scan(&wiring.accounts, &wiring.regions, args.output, &mut stdout)
+                .run_scan(&wiring.accounts, &wiring.regions, args.output, stdout)
                 .await;
             exit_with(disposition)
         }
@@ -660,14 +703,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.execute,
                     std::io::stdin().is_terminal(),
                     interaction,
-                    &mut stdout,
+                    stdout,
                 )
                 .await;
             exit_with(disposition)
         }
         Commands::Audit(args) => {
             let reader = AuditReader::new(args.audit_log_path);
-            exit_with(run_audit(&reader, args.output, &mut stdout))
+            exit_with(run_audit(&reader, args.output, stdout))
         }
         Commands::Retention(args) => match args.command {
             RetentionCommands::Set(set_args) => {
@@ -708,6 +751,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 exit_with(disposition)
             }
         },
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse_args();
+    init_tracing(cli.verbose);
+
+    let mut stdout = std::io::stdout();
+    if let Err(err) = run(cli.command, &mut stdout).await {
+        print_fatal_error(err.as_ref());
+        std::process::exit(1);
     }
 }
 
