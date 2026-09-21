@@ -32,6 +32,11 @@ use crate::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem};
     about = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI"
 )]
 pub struct Cli {
+    /// AWS SDK / 内部処理の詳細ログをそのまま標準エラーへ出力する（`--debug`も同義）。
+    /// 指定しない場合、標準エラーには自身の警告のみを表示し、外部クレートの生ログは抑制する。
+    #[arg(long, alias = "debug", global = true)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -584,6 +589,32 @@ mod tests {
         assert!(
             Cli::parse_from_args(["cwsweep", "--regions", "us-east-1", "--scan-only"]).is_err()
         );
+    }
+
+    // --- --verbose / --debug（グローバルフラグ） ---
+
+    #[test]
+    fn verbose_flag_defaults_to_false() {
+        let cli = Cli::parse_from_args(["cwsweep", "scan"]).unwrap();
+        assert!(!cli.verbose);
+    }
+
+    #[test]
+    fn verbose_flag_can_be_set_via_verbose_or_debug_alias() {
+        let cli = Cli::parse_from_args(["cwsweep", "scan", "--verbose"]).unwrap();
+        assert!(cli.verbose);
+        let cli = Cli::parse_from_args(["cwsweep", "scan", "--debug"]).unwrap();
+        assert!(cli.verbose);
+    }
+
+    #[test]
+    fn verbose_flag_is_global_and_works_before_or_after_the_subcommand() {
+        let cli = Cli::parse_from_args(["cwsweep", "--verbose", "scan"]).unwrap();
+        assert!(cli.verbose);
+        let cli = Cli::parse_from_args(["cwsweep", "clean", "--debug"]).unwrap();
+        assert!(cli.verbose);
+        let cli = Cli::parse_from_args(["cwsweep", "audit", "--verbose"]).unwrap();
+        assert!(cli.verbose);
     }
 
     #[test]
