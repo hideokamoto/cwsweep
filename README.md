@@ -71,7 +71,8 @@ cwsweep retention set --regions all --days 90 --execute --audit-log-path /var/lo
 - `--days` は必須。CloudWatch Logs が受け付ける離散値（1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180,
   365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653）以外は AWS へ接続する前にエラーになる。
 - スキャンで見つかった全ロググループが対象になる（対話式選択は行わない）。TTY では実行前に
-  対象一覧を表示して確認を取る。非TTY（CI 等）では確認を省略し、`--execute` があればそのまま適用する。
+  対象一覧を表示して確認を取る。非TTY（CI 等）では dry-run のみ実行でき、`--execute` を渡すと
+  エラー終了する。
 - `delete-log-group` へ到達する経路を持たない。dry-run 既定・監査ログ必須記録・二重 Identity 検証は
   `clean` と同じ安全機構を流用する。
 

@@ -454,7 +454,7 @@ impl CliApp {
 
     /// `retention set`: スキャン → 表示 → 全件に`SetRetention { days }`を計画 → 確認（TTY時）→ 実行。
     /// 削除アクションは一切構築しない。`execute == false`ならAPIは呼ばれない。
-    /// 非TTYでは確認プロンプトを省略し、`--execute`があればそのまま適用する。
+    /// 非TTYでは`--execute`を拒否し、dry-runのみ実行する。
     pub async fn run_set_retention<C: ConfirmPrompt>(
         &self,
         accounts: &[AccountInfo],
@@ -471,6 +471,12 @@ impl CliApp {
         let action_kind = ActionKind::SetRetention { days };
         if let Err(e) = CliApp::plan(&[], action_kind) {
             return ExitDisposition::Error(e.to_string());
+        }
+        if !stdin_is_tty && execute {
+            return ExitDisposition::Error(
+                "stdin is not a TTY; `--execute` requires an interactive confirmation. Re-run without `--execute` for a dry-run."
+                    .to_string(),
+            );
         }
 
         let (aggregator, outcomes) = self.scan_all(accounts, regions).await;
@@ -1740,7 +1746,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_set_retention_without_tty_applies_when_execute_is_supplied() {
+    async fn run_set_retention_without_tty_rejects_execute() {
         let dir = tempfile::tempdir().unwrap();
         let api = recording_api();
         let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
@@ -1761,9 +1767,37 @@ mod tests {
             )
             .await;
 
-        assert_eq!(disposition, ExitDisposition::Success);
-        assert_eq!(retentions(&api), 2);
+        assert!(matches!(disposition, ExitDisposition::Error(_)));
+        assert_eq!(retentions(&api), 0);
         assert_eq!(deletes(&api), 0);
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_without_tty_dry_run_succeeds_without_api_calls() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(NeverConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 30,
+                    execute: false,
+                    stdin_is_tty: false,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert_eq!(disposition, ExitDisposition::Success);
+        assert_eq!(retentions(&api), 0);
+        assert_eq!(deletes(&api), 0);
+        assert!(String::from_utf8(out).unwrap().contains("dry-run"));
     }
 
     #[tokio::test]
