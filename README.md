@@ -5,7 +5,7 @@ AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択し�
 
 ## 使い方
 
-`cwsweep` は `scan` / `clean` / `audit` の3つのサブコマンドを持つ。サブコマンドを省略した
+`cwsweep` は `scan` / `clean` / `audit` / `retention set` のサブコマンドを持つ。サブコマンドを省略した
 呼び出しはエラーになる（旧フラグ形式との互換エイリアスは提供しない。後述の移行ガイドを参照）。
 
 ### scan — 棚卸し（読み取り専用）
@@ -55,6 +55,26 @@ cwsweep clean --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
 標準入力がTTYでない場合（パイプ・CI等）、`clean` はスキャン結果を表示したうえで
 「対話式選択に進めない」警告を出して正常終了する。非対話環境での棚卸しには `scan` を使う。
 
+### retention set — 全ロググループへ retention 日数を一律設定（削除なし）
+
+```bash
+# dry-run（既定）。スキャン → 確認までは進むが、put-retention-policy は一切呼ばれない
+cwsweep retention set --regions us-east-1 --days 30
+
+# 実際に retention を設定する（このフラグを明示的に渡さない限り絶対に実行されない）
+cwsweep retention set --regions us-east-1 --days 30 --execute
+
+# 監査ログの出力先を上書きする（clean と同じく無効化するオプションは存在しない）
+cwsweep retention set --regions all --days 90 --execute --audit-log-path /var/log/cwsweep/audit.jsonl
+```
+
+- `--days` は必須。CloudWatch Logs が受け付ける離散値（1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180,
+  365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653）以外は AWS へ接続する前にエラーになる。
+- スキャンで見つかった全ロググループが対象になる（対話式選択は行わない）。TTY では実行前に
+  対象一覧を表示して確認を取る。非TTY（CI 等）では確認を省略し、`--execute` があればそのまま適用する。
+- `delete-log-group` へ到達する経路を持たない。dry-run 既定・監査ログ必須記録・二重 Identity 検証は
+  `clean` と同じ安全機構を流用する。
+
 ### audit — 監査ログの閲覧（読み取り専用）
 
 ```bash
@@ -75,8 +95,9 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
   選択させ、非TTY（CI/パイプ）ではエラー終了する。全リージョンを対象にするには `--regions all`
   を明示する必要があり、その場合も対象件数を表示してTTYでは確認を取る
   （誤って無関係なリージョンをスキャンする事故を防ぐため）。
-- `clean --execute` を渡さない限り、`delete-log-group` / `put-retention-policy` は一切呼び出さ
-  れない（dry-run既定）。`scan` と `audit` はこれらのAPIに到達する経路を持たない。
+- `clean --execute` / `retention set --execute` を渡さない限り、`delete-log-group` /
+  `put-retention-policy` は一切呼び出されない（dry-run既定）。`scan` と `audit` はこれらのAPIに
+  到達する経路を持たず、`retention set` は `delete-log-group` に到達する経路を持たない。
 - 対話式マルチセレクトの初期状態は常に全チェックOFF。
 - `clean` による削除・retention変更を伴う操作は、対象アカウントID・リージョン・ロググループ名・
   実行時刻・成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。

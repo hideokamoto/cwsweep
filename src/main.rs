@@ -19,14 +19,17 @@ use uuid::Uuid;
 
 use aws_sdk_sts::config::ProvideCredentials;
 use cwsweep::audit::{AuditLogger, AuditReader, AuditWrite};
-use cwsweep::cli::{run_audit, CleanInteraction, Cli, CliApp, Commands, ExitDisposition, ScanApp};
+use cwsweep::cli::{
+    run_audit, CleanInteraction, Cli, CliApp, Commands, ExitDisposition, RetentionCommands,
+    ScanApp, SetRetentionOptions,
+};
 use cwsweep::confirmation::{ConfirmPrompt, ConfirmationPresenter, ConfirmationSummary};
 use cwsweep::credentials::{AccountCredentials, AssumeRoleOperations, CredentialProvider};
 use cwsweep::error::{AssumeRoleError, CallerIdentityCallError, OrgDiscoveryError};
 use cwsweep::execution::ActionApiOperations;
 use cwsweep::identity::{CallerIdentityOperations, IdentityCheck, IdentityVerifier};
 use cwsweep::org_discovery::{AccountInfo, AccountStatus, ListAccountsOperations, OrgDiscovery};
-use cwsweep::planner::ActionKind;
+use cwsweep::planner::{ActionKind, ActionPlanner};
 use cwsweep::regions::{
     region_spec, resolve_regions, ListRegionsError, ListRegionsOperations, RegionPrompt,
     RegionResolveError, RegionSpec,
@@ -666,6 +669,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let reader = AuditReader::new(args.audit_log_path);
             exit_with(run_audit(&reader, args.output, &mut stdout))
         }
+        Commands::Retention(args) => match args.command {
+            RetentionCommands::Set(set_args) => {
+                // 不正な日数はAWSへ接続する前に弾く。
+                ActionPlanner::plan(
+                    &[],
+                    ActionKind::SetRetention {
+                        days: set_args.days,
+                    },
+                )?;
+                let audit_logger: Arc<dyn AuditWrite> =
+                    Arc::new(AuditLogger::open(&set_args.audit_log_path)?);
+                let wiring = wire_aws(&set_args.role_name, &set_args.regions).await?;
+                let app = CliApp {
+                    credential_provider: wiring.credential_provider,
+                    identity: wiring.identity,
+                    logs_client: Arc::new(CloudWatchLogsAdapter),
+                    api_client: Arc::new(CloudWatchLogsAdapter),
+                    audit_logger,
+                    run_id: Uuid::new_v4().to_string(),
+                };
+                let presenter = ConfirmationPresenter::new(InquireConfirmPrompt {
+                    execute: set_args.execute,
+                });
+                let disposition = app
+                    .run_set_retention(
+                        &wiring.accounts,
+                        &wiring.regions,
+                        SetRetentionOptions {
+                            days: set_args.days,
+                            execute: set_args.execute,
+                            stdin_is_tty: std::io::stdin().is_terminal(),
+                        },
+                        &presenter,
+                        &mut stdout,
+                    )
+                    .await;
+                exit_with(disposition)
+            }
+        },
     }
 }
 

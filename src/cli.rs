@@ -1,7 +1,7 @@
 //! `CliApp` コンポーネント。
 //!
-//! CLI引数解析（`scan` / `clean` / `audit` サブコマンド）と、サブコマンドごとの
-//! ハンドラ（`run_scan` / `run_clean` / `run_audit`）を担う。
+//! CLI引数解析（`scan` / `clean` / `audit` / `retention set` サブコマンド）と、サブコマンドごとの
+//! ハンドラ（`run_scan` / `run_clean` / `run_audit` / `run_set_retention`）を担う。
 //! `--regions`は明示リージョン・`all`（商用全リージョン）・未指定（TTYのみ対話式選択、
 //! 非TTYはエラー）を受け付ける。解決ロジックは`crate::regions`を参照。
 //! 旧フラグ方式（`--scan-only`／トップレベル`--execute`）への互換エイリアスは提供しない（FR6.1）。
@@ -44,6 +44,46 @@ pub enum Commands {
     Clean(CleanArgs),
     /// 監査ログ（JSON Lines）を読み取り専用で表示する。
     Audit(AuditArgs),
+    /// retention（保持期間）に関する操作。削除は一切行わない。
+    Retention(RetentionArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct RetentionArgs {
+    #[command(subcommand)]
+    pub command: RetentionCommands,
+}
+
+/// `cwsweep retention <sub>`。将来 `get` / `clear` 等を追加する拡張点。
+#[derive(Subcommand, Debug, Clone)]
+pub enum RetentionCommands {
+    /// スキャンで見つかった全ロググループに一律のretention日数を設定する
+    /// （--execute時のみ実行。削除は行わない。監査ログを必ず記録する）。
+    Set(SetRetentionArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct SetRetentionArgs {
+    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
+    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub regions: Vec<String>,
+
+    /// メンバーアカウントへAssumeRoleする際のロール名。
+    #[arg(long, default_value = "OrganizationAccountAccessRole")]
+    pub role_name: String,
+
+    /// 設定するretention日数（CloudWatch Logsが許容する離散値のみ）。
+    #[arg(long)]
+    pub days: i32,
+
+    /// このフラグを明示的に指定しない限り、put-retention-policy は呼び出されない（dry-run既定）。
+    #[arg(long, default_value_t = false)]
+    pub execute: bool,
+
+    /// 監査ログ（JSON Lines）の出力先パス。無効化するオプションは存在しない。
+    #[arg(long, default_value = "cwsweep-audit.jsonl")]
+    pub audit_log_path: std::path::PathBuf,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -118,6 +158,9 @@ impl Cli {
             Commands::Scan(args) => &mut args.regions,
             Commands::Clean(args) => &mut args.regions,
             Commands::Audit(_) => return,
+            Commands::Retention(RetentionArgs {
+                command: RetentionCommands::Set(args),
+            }) => &mut args.regions,
         };
         let mut seen = std::collections::HashSet::new();
         regions.retain(|r| seen.insert(r.clone()));
@@ -296,6 +339,14 @@ pub struct CleanInteraction<'a, S: MultiSelectPrompt, C: ConfirmPrompt> {
     pub choose_action: &'a dyn Fn() -> Result<ActionKind, String>,
 }
 
+/// `retention set`の実行オプション。
+#[derive(Debug, Clone, Copy)]
+pub struct SetRetentionOptions {
+    pub days: i32,
+    pub execute: bool,
+    pub stdin_is_tty: bool,
+}
+
 /// FR4: 監査ログを読み取り専用で全件表示する。依存は`AuditRead`と出力先のみで、
 /// 破壊的操作系・監査ログ書き込み系の型には到達しない（BR4.1 / BR4.2）。
 pub fn run_audit(
@@ -388,6 +439,81 @@ impl CliApp {
         else {
             let _ = writeln!(out, "確認が得られなかったため、処理を中止します。");
             return ExitDisposition::Success;
+        };
+
+        match self.execute(&confirmed_actions, execute).await {
+            Ok(results) => {
+                for outcome in &results {
+                    let _ = writeln!(out, "{}", format_outcome_line(outcome));
+                }
+                ExitDisposition::Success
+            }
+            Err(e) => ExitDisposition::Error(e.to_string()),
+        }
+    }
+
+    /// `retention set`: スキャン → 表示 → 全件に`SetRetention { days }`を計画 → 確認（TTY時）→ 実行。
+    /// 削除アクションは一切構築しない。`execute == false`ならAPIは呼ばれない。
+    /// 非TTYでは確認プロンプトを省略し、`--execute`があればそのまま適用する。
+    pub async fn run_set_retention<C: ConfirmPrompt>(
+        &self,
+        accounts: &[AccountInfo],
+        regions: &[String],
+        options: SetRetentionOptions,
+        presenter: &ConfirmationPresenter<C>,
+        out: &mut dyn Write,
+    ) -> ExitDisposition {
+        let SetRetentionOptions {
+            days,
+            execute,
+            stdin_is_tty,
+        } = options;
+        let action_kind = ActionKind::SetRetention { days };
+        if let Err(e) = CliApp::plan(&[], action_kind) {
+            return ExitDisposition::Error(e.to_string());
+        }
+
+        let (aggregator, outcomes) = self.scan_all(accounts, regions).await;
+        if let Some(disposition) = report_scan_outcomes(&outcomes) {
+            return disposition;
+        }
+        let _ = writeln!(
+            out,
+            "{}",
+            CliApp::render_output(&aggregator, OutputFormat::Table)
+        );
+        if aggregator.is_empty() {
+            let _ = writeln!(out, "retention設定対象のロググループはありません。");
+            return ExitDisposition::Success;
+        }
+
+        let targets: Vec<crate::aggregator::LogGroupRecord> = aggregator
+            .sorted_by_size_desc()
+            .into_iter()
+            .cloned()
+            .collect();
+        let planned = match CliApp::plan(&targets, action_kind) {
+            Ok(planned) => planned,
+            Err(e) => return ExitDisposition::Error(e.to_string()),
+        };
+        let total_bytes: i64 = targets.iter().map(|r| r.stored_bytes).sum();
+
+        let confirmed_actions = if stdin_is_tty {
+            match CliApp::confirm(presenter, &planned, total_bytes) {
+                Some(actions) => actions,
+                None => {
+                    let _ = writeln!(out, "確認が得られなかったため、処理を中止します。");
+                    return ExitDisposition::Success;
+                }
+            }
+        } else {
+            planned
+                .into_iter()
+                .map(|a| PlannedAction {
+                    confirmed: true,
+                    ..a
+                })
+                .collect()
         };
 
         match self.execute(&confirmed_actions, execute).await {
@@ -874,6 +1000,7 @@ mod tests {
 
     struct RecordingApi {
         deletes: std::sync::atomic::AtomicUsize,
+        retentions: std::sync::atomic::AtomicUsize,
     }
     #[async_trait]
     impl ActionApiOperations for RecordingApi {
@@ -894,6 +1021,8 @@ mod tests {
             _l: &str,
             _d: i32,
         ) -> Result<(), String> {
+            self.retentions
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(())
         }
     }
@@ -942,6 +1071,7 @@ mod tests {
             Arc::new(StubIdentityOk),
             Arc::new(RecordingApi {
                 deletes: std::sync::atomic::AtomicUsize::new(0),
+                retentions: std::sync::atomic::AtomicUsize::new(0),
             }),
             &dir,
         );
@@ -961,6 +1091,7 @@ mod tests {
             Arc::new(StubIdentityFailForMember),
             Arc::new(RecordingApi {
                 deletes: std::sync::atomic::AtomicUsize::new(0),
+                retentions: std::sync::atomic::AtomicUsize::new(0),
             }),
             &dir,
         );
@@ -1086,6 +1217,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let api = Arc::new(RecordingApi {
             deletes: std::sync::atomic::AtomicUsize::new(0),
+            retentions: std::sync::atomic::AtomicUsize::new(0),
         });
         let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
         let confirmed = vec![PlannedAction {
@@ -1107,6 +1239,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let api = Arc::new(RecordingApi {
             deletes: std::sync::atomic::AtomicUsize::new(0),
+            retentions: std::sync::atomic::AtomicUsize::new(0),
         });
         let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
         let confirmed = vec![PlannedAction {
@@ -1153,6 +1286,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let api = Arc::new(RecordingApi {
             deletes: std::sync::atomic::AtomicUsize::new(0),
+            retentions: std::sync::atomic::AtomicUsize::new(0),
         });
         let audit_logger: Arc<dyn AuditWrite> =
             Arc::new(AuditLogger::open(&dir.path().join("audit.jsonl")).unwrap());
@@ -1341,11 +1475,16 @@ mod tests {
     fn recording_api() -> Arc<RecordingApi> {
         Arc::new(RecordingApi {
             deletes: std::sync::atomic::AtomicUsize::new(0),
+            retentions: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
     fn deletes(api: &RecordingApi) -> usize {
         api.deletes.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn retentions(api: &RecordingApi) -> usize {
+        api.retentions.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     fn choose_delete() -> Result<ActionKind, String> {
@@ -1473,6 +1612,212 @@ mod tests {
         assert_eq!(disposition, ExitDisposition::Success);
         assert_eq!(deletes(&api), 0);
         assert!(String::from_utf8(out).unwrap().contains("処理を中止します"));
+    }
+
+    // --- retention set ---
+
+    fn set_retention_args(cli: Cli) -> SetRetentionArgs {
+        match cli.command {
+            Commands::Retention(RetentionArgs {
+                command: RetentionCommands::Set(args),
+            }) => args,
+            other => panic!("expected retention set, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn retention_set_parses_days_and_defaults() {
+        let args = set_retention_args(
+            Cli::parse_from_args([
+                "cwsweep",
+                "retention",
+                "set",
+                "--regions",
+                "us-east-1,us-west-2,us-east-1",
+                "--days",
+                "30",
+            ])
+            .unwrap(),
+        );
+        assert_eq!(args.regions, vec!["us-east-1", "us-west-2"]);
+        assert_eq!(args.days, 30);
+        assert!(!args.execute);
+        assert_eq!(args.role_name, "OrganizationAccountAccessRole");
+        assert_eq!(
+            args.audit_log_path,
+            std::path::PathBuf::from("cwsweep-audit.jsonl")
+        );
+    }
+
+    #[test]
+    fn retention_set_accepts_execute_and_overrides() {
+        let args = set_retention_args(
+            Cli::parse_from_args([
+                "cwsweep",
+                "retention",
+                "set",
+                "--days",
+                "7",
+                "--execute",
+                "--role-name",
+                "CustomRole",
+                "--audit-log-path",
+                "x.jsonl",
+            ])
+            .unwrap(),
+        );
+        assert!(args.regions.is_empty());
+        assert!(args.execute);
+        assert_eq!(args.role_name, "CustomRole");
+        assert_eq!(args.audit_log_path, std::path::PathBuf::from("x.jsonl"));
+    }
+
+    #[test]
+    fn retention_set_requires_days_and_a_nested_subcommand() {
+        assert!(
+            Cli::parse_from_args(["cwsweep", "retention", "set", "--regions", "us-east-1"])
+                .is_err()
+        );
+        assert!(Cli::parse_from_args(["cwsweep", "retention"]).is_err());
+        assert!(Cli::parse_from_args(["cwsweep", "retention", "set", "--days", "abc"]).is_err());
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_dry_run_default_never_calls_any_api() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(AlwaysConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 30,
+                    execute: false,
+                    stdin_is_tty: true,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert_eq!(disposition, ExitDisposition::Success);
+        assert_eq!(retentions(&api), 0);
+        assert_eq!(deletes(&api), 0);
+        assert!(String::from_utf8(out).unwrap().contains("skipped (dry-run"));
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_with_execute_calls_put_retention_for_every_group_and_never_deletes()
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(AlwaysConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 30,
+                    execute: true,
+                    stdin_is_tty: true,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert_eq!(disposition, ExitDisposition::Success);
+        assert_eq!(retentions(&api), 2);
+        assert_eq!(deletes(&api), 0);
+        assert!(String::from_utf8(out).unwrap().contains(": success"));
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_without_tty_applies_when_execute_is_supplied() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(NeverConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 30,
+                    execute: true,
+                    stdin_is_tty: false,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert_eq!(disposition, ExitDisposition::Success);
+        assert_eq!(retentions(&api), 2);
+        assert_eq!(deletes(&api), 0);
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_aborts_when_tty_confirmation_is_declined() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(NeverConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 30,
+                    execute: true,
+                    stdin_is_tty: true,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert_eq!(disposition, ExitDisposition::Success);
+        assert_eq!(retentions(&api), 0);
+        assert!(String::from_utf8(out).unwrap().contains("処理を中止します"));
+    }
+
+    #[tokio::test]
+    async fn run_set_retention_rejects_invalid_days_before_scanning() {
+        let dir = tempfile::tempdir().unwrap();
+        let api = recording_api();
+        let app = build_app(Arc::new(StubIdentityOk), api.clone(), &dir);
+        let presenter = ConfirmationPresenter::new(AlwaysConfirmPrompt);
+        let mut out = Vec::new();
+
+        let disposition = app
+            .run_set_retention(
+                &accounts(),
+                &[REGION.to_string()],
+                SetRetentionOptions {
+                    days: 13,
+                    execute: true,
+                    stdin_is_tty: true,
+                },
+                &presenter,
+                &mut out,
+            )
+            .await;
+
+        assert!(matches!(disposition, ExitDisposition::Error(_)));
+        assert_eq!(retentions(&api), 0);
+        assert!(out.is_empty());
     }
 
     // --- run_audit ---
