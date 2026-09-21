@@ -158,6 +158,30 @@ cargo llvm-cov --lib --summary-only
 `Cargo.lock` はリポジトリにコミットしており、CIでは `--locked` フラグでビルド・テストする
 （team.md）。
 
+## リリース
+
+`main` へのマージ自体はリリースをトリガーしない。バージョンタグ（`v1.2.3` 形式）を push
+すると、GitHub Releases へクロスプラットフォーム（Linux/macOS、x86_64/arm64）の
+リリースバイナリが添付される「タグ駆動リリース」方式を採用している。
+
+このビルド・添付処理は、このリポジトリの `.circleci/config.yml` には**含まれていない**。
+[hideokamoto/circleci-configurations](https://github.com/hideokamoto/circleci-configurations)
+の [`workflows/release/rust-github-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-release.yaml)
+を、CircleCI の [Config Sources 機能（複数パイプライン設定）](https://circleci.com/docs/guides/orchestrate/set-up-multiple-configuration-files-for-a-project/)
+で紐づけた、タグ push 起点の**別のパイプライン定義**として実行する
+（通常の fmt/clippy/test/coverage/audit/deny は、このリポジトリの `.circleci/config.yml`
+のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`GH_TOKEN`）は
+そちらのリポジトリの `workflows/release/README.md` を参照。
+
+```bash
+# バージョンを上げてコミット
+cargo set-version 0.2.1  # または Cargo.toml を直接編集
+
+# タグを打って push（これがリリースパイプラインのトリガー）
+git tag v0.2.1
+git push origin v0.2.1
+```
+
 ## AI-DLC Workflows v2
 
 This repository ships [AI-DLC Workflows v2](https://github.com/awslabs/aidlc-workflows)
