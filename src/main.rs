@@ -745,7 +745,7 @@ async fn run(
                             stdin_is_tty: std::io::stdin().is_terminal(),
                         },
                         &presenter,
-                        &mut stdout,
+                        stdout,
                     )
                     .await;
                 exit_with(disposition)
