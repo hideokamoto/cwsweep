@@ -955,6 +955,7 @@ dependencies = [
 name = "cwsweep"
 version = "0.2.0"
 dependencies = [
+ "anstyle-query",
  "async-trait",
  "aws-config",
  "aws-sdk-account",

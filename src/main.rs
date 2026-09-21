@@ -604,6 +604,24 @@ fn exit_with(disposition: ExitDisposition) -> Result<(), Box<dyn std::error::Err
     }
 }
 
+/// 標準エラーが端末であり、ANSIエスケープシーケンスを処理できるかを返す。
+/// WindowsではVT処理を有効化できた場合にのみ対応済みとみなす。
+fn stderr_supports_ansi() -> bool {
+    if !std::io::stderr().is_terminal() {
+        return false;
+    }
+
+    #[cfg(windows)]
+    {
+        anstyle_query::windows::enable_ansi_colors().unwrap_or(false)
+    }
+
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
 /// `--verbose`/`--debug`未指定時は、自クレート（`cwsweep`）自身の警告のみを標準エラーへ
 /// 出力し、`aws-config`等の外部クレートが出す生ログ（認証エラー時に大量に出るデバッグ
 /// 用の内部詳細）は抑制する。`RUST_LOG`が設定されている場合は常にそれを優先する。
@@ -618,7 +636,7 @@ fn init_tracing(verbose: bool) {
 
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_ansi(std::io::stderr().is_terminal())
+        .with_ansi(stderr_supports_ansi())
         .with_env_filter(filter)
         .init();
 }
@@ -628,7 +646,7 @@ fn init_tracing(verbose: bool) {
 /// 出すような内部構造のダンプ（AWS SDKのエラー型ツリー等）は表示しない。
 fn print_fatal_error(err: &(dyn std::error::Error + 'static)) {
     let message = sdk_error_message(err);
-    if std::io::stderr().is_terminal() {
+    if stderr_supports_ansi() {
         eprintln!("\x1b[31mError: {message}\x1b[0m");
     } else {
         eprintln!("Error: {message}");
