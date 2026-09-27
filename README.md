@@ -198,26 +198,34 @@ cargo llvm-cov --lib --summary-only
 
 ## リリース
 
-`main` へのマージ自体はリリースをトリガーしない。バージョンタグ（`v1.2.3` 形式）を push
-すると、GitHub Releases へクロスプラットフォーム（Linux/macOS、x86_64/arm64）の
-リリースバイナリが添付される「タグ駆動リリース」方式を採用している。
+`main` へのマージ（push）がリリースのトリガーになる。`Cargo.toml` の `version` がまだ
+リリースされていなければ、クロスプラットフォーム（Linux/macOS、x86_64/arm64）の
+リリースバイナリをビルドし、`vX.Y.Z` タグ付きの GitHub Release を作成して添付する。
+タグはパイプラインが `gh release create --target <マージコミット>` で自動作成するため、
+**手動でタグを打って push してはいけない**（リリースパイプラインは「`vX.Y.Z` タグが
+既に存在する＝公開済み」と判定してビルドをスキップするため、手動タグを先に push すると
+そのバージョンのリリースが作られなくなる）。`version` が変わらない `main` への push では、
+既存タグを検知して何もせずに終了する。
 
 このビルド・添付処理は、このリポジトリの `.circleci/config.yml` には**含まれていない**。
 [hideokamoto/circleci-configurations](https://github.com/hideokamoto/circleci-configurations)
 の [`workflows/release/rust-github-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-release.yaml)
 を、CircleCI の [Config Sources 機能（複数パイプライン設定）](https://circleci.com/docs/guides/orchestrate/set-up-multiple-configuration-files-for-a-project/)
-で紐づけた、タグ push 起点の**別のパイプライン定義**として実行する
+で紐づけた、`Pushes to default branch` 起点の**別のパイプライン定義**として実行する
 （通常の fmt/clippy/test/coverage/audit/deny は、このリポジトリの `.circleci/config.yml`
-のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`GH_TOKEN`）は
+のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`circleci`）は
 そちらのリポジトリの `workflows/release/README.md` を参照。
 
 ```bash
-# バージョンを上げてコミット
-cargo set-version 0.2.1  # または Cargo.toml を直接編集
+# フィーチャーブランチでバージョンを上げる。Cargo.toml を手編集すると Cargo.lock の
+# 同期を忘れやすい（リリースビルドは --locked のため、同期漏れがあると全ターゲット
+# のビルドが失敗する。v0.2.1 で実際に事故った）。`cargo set-version` (cargo-edit) が
+# Cargo.toml と Cargo.lock を一括で更新するので、手編集ではなくこちらを使う。
+cargo install cargo-edit --locked   # 未導入の場合のみ
+cargo set-version 0.2.2
+cargo metadata --locked --format-version 1 > /dev/null  # 同期確認（失敗しなければOK）
 
-# タグを打って push（これがリリースパイプラインのトリガー）
-git tag v0.2.1
-git push origin v0.2.1
+# CHANGELOG.md を更新してコミットし、PR 経由で main へマージする（これがリリースのトリガー）
 ```
 
 ## AI-DLC Workflows v2
