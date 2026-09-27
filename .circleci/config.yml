@@ -143,8 +143,9 @@ workflows:
           name: deny-advisories
           checks: "advisories"
 
-# タグ駆動リリース（v0.1.0 等のタグpushでクロスプラットフォームのリリースバイナリをビルドし
-# GitHub Releases に添付する）は、このリポジトリのパイプライン定義には含まれていない。
-# hideokamoto/circleci-configurations の workflows/release/rust-github-release.yaml を
-# CircleCI の Config Sources 機能（複数パイプライン設定）で紐づけた、別のパイプライン定義
-# （タグ push 起点）として実行する。設定手順は README.md の「リリース」節を参照。
+# リリース（main への push で、Cargo.toml の version が未リリースならクロスプラットフォームの
+# リリースバイナリをビルドし、vX.Y.Z タグ付きの GitHub Release を作成して添付する）は、
+# このリポジトリのパイプライン定義には含まれていない。hideokamoto/circleci-configurations の
+# workflows/release/rust-github-release.yaml を CircleCI の Config Sources 機能（複数パイプライン
+# 設定）で紐づけた、別のパイプライン定義（Pushes to default branch 起点）として実行する。
+# タグはそのパイプラインが自動作成するため手動で push しない。詳細は README.md の「リリース」節を参照。
