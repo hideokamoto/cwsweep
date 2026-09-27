@@ -217,10 +217,12 @@ cargo llvm-cov --lib --summary-only
 そちらのリポジトリの `workflows/release/README.md` を参照。
 
 ```bash
-# フィーチャーブランチでバージョンを上げる
-# Cargo.toml を編集したら、Cargo.lock も必ず同期する（リリースビルドは --locked のため、
-# 同期漏れがあると全ターゲットのビルドが失敗する）
-cargo update -p cwsweep --offline
+# フィーチャーブランチでバージョンを上げる。Cargo.toml を手編集すると Cargo.lock の
+# 同期を忘れやすい（リリースビルドは --locked のため、同期漏れがあると全ターゲット
+# のビルドが失敗する。v0.2.1 で実際に事故った）。`cargo set-version` (cargo-edit) が
+# Cargo.toml と Cargo.lock を一括で更新するので、手編集ではなくこちらを使う。
+cargo install cargo-edit --locked   # 未導入の場合のみ
+cargo set-version 0.2.2
 cargo metadata --locked --format-version 1 > /dev/null  # 同期確認（失敗しなければOK）
 
 # CHANGELOG.md を更新してコミットし、PR 経由で main へマージする（これがリリースのトリガー）
