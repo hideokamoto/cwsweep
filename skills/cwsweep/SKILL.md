@@ -19,7 +19,7 @@ cwsweep は、AWS Organization の管理アカウントの認証情報で各メ�
 
 ## 前提条件
 
-- `cwsweep --version` が動く。インストールは https://github.com/hideokamoto/cwsweep/releases から対応するバイナリを取得する(Linux / macOS、x86_64 / arm64)。ソースからは `cargo install --git https://github.com/hideokamoto/cwsweep --locked`。
+- `cwsweep --version` が動く。インストールは https://github.com/hideokamoto/cwsweep/releases から対応するバイナリを取得する(Linux / macOS、x86_64 / arm64)。ソースからは Rust 1.94.1 以上で `cargo install --git https://github.com/hideokamoto/cwsweep --locked`。
 - **Organization の管理アカウントの認証情報**で実行する(AWS SDK の既定の認証情報解決チェーンで解決される)。管理アカウント自身には AssumeRole せず、その認証情報をそのまま使う。Organization のメンバーでないアカウントで実行した場合は、そのアカウントだけが対象になる。
 - メンバーアカウントには、管理アカウントから AssumeRole できるロールが必要。既定のロール名は `OrganizationAccountAccessRole`。このロールは Organizations 経由で作成したアカウントに自動で作られるが、招待で参加したアカウントには自分で作る必要がある(出典: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_access.html)。名前が違う場合は `--role-name` で指定する。
 - 呼び出し元の認証情報に必要な権限は、次の API を呼べること: Organizations の ListAccounts(管理アカウントまたは委任管理者からのみ呼べる。出典: https://docs.aws.amazon.com/organizations/latest/APIReference/API_ListAccounts.html)、各メンバーアカウントのロールへの sts:AssumeRole、`--regions all` または `--regions` 省略時の account の ListRegions。AssumeRole 先のロールには CloudWatch Logs の DescribeLogGroups(`clean` の削除は DeleteLogGroup、retention 変更は PutRetentionPolicy も)が必要。GetCallerIdentity は権限不要(出典: https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)。

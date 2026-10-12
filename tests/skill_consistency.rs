@@ -1,4 +1,5 @@
-//! `skills/cwsweep/SKILL.md` がコードの実体とずれていないことを検証する。
+//! `skills/cwsweep/SKILL.md` と、必要な Rust バージョンを書いた docs が、コードの実体
+//! （`Cargo.toml` の `rust-version`・CLI 定義・定数）とずれていないことを検証する。
 //!
 //! CLI のフラグ・サブコマンド・既定値・retention の許容値を変えたのに SKILL.md を更新し忘れると、
 //! このテストが失敗する（AGENTS.md「CLI を変えたらスキルも更新する」の機械的な担保）。
@@ -212,5 +213,40 @@ fn every_cwsweep_command_in_code_blocks_is_a_real_subcommand() {
     assert!(
         checked >= 5,
         "expected several cwsweep commands, got {checked}"
+    );
+}
+
+fn repo_file(rel: &str) -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+}
+
+fn declared_rust_version() -> String {
+    repo_file("Cargo.toml")
+        .lines()
+        .find_map(|l| l.strip_prefix("rust-version = \""))
+        .and_then(|rest| rest.split('"').next())
+        .expect("Cargo.toml must declare rust-version")
+        .to_string()
+}
+
+#[test]
+fn rust_version_requirement_is_the_same_in_cargo_toml_skill_and_docs() {
+    let v = declared_rust_version();
+    let (_, body) = split_frontmatter(&skill_md());
+    assert!(body.contains(&format!("Rust {v} 以上")), "SKILL.md");
+    assert!(
+        repo_file("README.md").contains(&format!("Rust {v} 以上")),
+        "README.md"
+    );
+    assert!(
+        repo_file("website/src/content/docs/getting-started.md")
+            .contains(&format!("Rust {v} or later")),
+        "website getting-started (en)"
+    );
+    assert!(
+        repo_file("website/src/content/docs/ja/getting-started.md")
+            .contains(&format!("Rust {v} 以上")),
+        "website getting-started (ja)"
     );
 }
