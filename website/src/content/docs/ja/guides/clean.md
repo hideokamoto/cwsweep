@@ -22,5 +22,7 @@ cwsweep clean --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
 - 対話式マルチセレクトの初期状態は常に全チェックOFFです。
 - 実行前に、対象アカウントID・リージョン・ログループ名一覧・合計バイト数を再掲した確認画面を表示します。
 - 標準入力がTTYでない場合（パイプ・CI等）、`clean` はスキャン結果を表示したうえで「対話式選択に進めない」警告を出して正常終了します。非対話環境での棚卸しには[`scan`](/ja/guides/scan/) を使ってください。
+- `--execute` を付けた実行では、操作ごとにAPI呼び出しの直前に `sts:GetCallerIdentity` でアカウントIDを再検証し、監査ログにはAPI呼び出しの前に `intent` 行、後に `result` 行を追記します。dry-runでは監査ログに何も書きません。
+- 対話式マルチセレクトで対象を選んだあと、アクション（`delete`、または `set-retention`。その場合は日数を入力）を選びます。確認画面の既定は No です。
 
 安全機構の全体は [安全機構](/ja/reference/safety/) を参照してください。

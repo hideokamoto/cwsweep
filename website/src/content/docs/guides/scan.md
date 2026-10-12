@@ -30,7 +30,7 @@ cwsweep scan
 | Input | Behavior |
 |---|---|
 | `--regions us-east-1,ap-northeast-1` | Targets only the listed regions |
-| `--regions all` (`ALL` / `All` also accepted) | Calls `account:ListRegions` with the management account's credentials and targets every enabled region in the commercial partition (`aws`). GovCloud, China regions, and opt-in regions that are not enabled are excluded. The count and list are printed to stderr, and on a TTY you are asked to confirm (default: No) |
+| `--regions all` (`ALL` / `All` also accepted) | Calls `account:ListRegions` with the management account's credentials and targets every enabled region in the commercial partition (`aws`). GovCloud, China regions, and opt-in regions that are not enabled are excluded. If `all` is combined with other values, `all` wins. The count and list are printed to stderr, and on a TTY you are asked to confirm (default: No) |
 | Omitted, TTY | Pick regions from the same list via an interactive multi-select. Selecting zero regions is an error |
 | Omitted, non-TTY | Exits with an error asking you to specify `--regions` (does not connect to AWS) |
 

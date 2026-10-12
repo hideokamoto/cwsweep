@@ -147,6 +147,27 @@ cwsweep scan --regions us-west-2 --verbose
   `credentials-login` フィーチャが必要。現行の `Cargo.toml` では有効化済みなので、
   このエラーが出る場合は古いバイナリを使っている。最新ソースから再ビルド／再インストールする。
 
+## Agent Skill / llms.txt
+
+AIコーディングエージェント向けのスキル（[Agent Skills 仕様](https://agentskills.io/specification)）を
+`skills/cwsweep/SKILL.md` に置いている。必ず先に `scan` を実行する、dry-run を既定として扱う、
+`--execute` での本実行は利用者の承認後に利用者の端末で行う、といった手順を伝える。
+
+```bash
+npx skills add hideokamoto/cwsweep --skill cwsweep
+```
+
+`--skill cwsweep` は必須。このリポジトリには AI-DLC の別スキル（`.claude/` と `.cursor/`）も含まれ、
+付けないとそれらも選択肢に出る。
+
+docs サイトは、同じスキルを `/skill.md` と `/.well-known/agent-skills/` で、ドキュメント全体を
+`/llms.txt`（`/llms-full.txt`・`/llms-small.txt`）で配信する（詳細は
+[サイトのガイド](https://cwsweep.hidetaka.dev/guides/agent-skill/)）。スキルはビルド時に
+`skills/` から読み込み、サイト側にコピーは持たない。
+
+**CLI を変更したら、スキルも更新する。** フラグ・既定値・retention の許容値・必要な Rust バージョンが
+`skills/cwsweep/SKILL.md` とずれると `cargo test`（`tests/skill_consistency.rs`）が失敗する。
+
 ## v0.1 からの移行
 
 v0.2.0 でトップレベルのフラグ方式を廃止し、サブコマンド方式へ移行した。旧形式は互換
