@@ -1,16 +1,16 @@
 ---
-title: audit — 監査ログの閲覧
-description: 削除・retention変更の監査ログを読み取り専用で表示する。
+title: audit — View the audit log
+description: Display the deletion and retention-change audit log in read-only mode.
 sidebar:
   order: 4
 ---
 
 ```bash
-# 既定パス（cwsweep-audit.jsonl）の監査ログを表形式で全件表示する
+# Show every entry of the audit log at the default path (cwsweep-audit.jsonl) as a table
 cwsweep audit
 
-# パスと出力フォーマットを指定する
+# Specify the path and output format
 cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
 ```
 
-`audit` はAWSに接続せず、監査ログを一切書き換えません。ファイルが存在しない場合は空の結果として正常終了し、フォーマット不正な行は標準エラーへ警告を出してスキップします（前後の正常なエントリは表示されます）。
+`audit` does not connect to AWS and never modifies the audit log. If the file does not exist, it exits successfully with an empty result. Malformed lines are skipped with a warning on stderr (valid entries before and after them are still shown).

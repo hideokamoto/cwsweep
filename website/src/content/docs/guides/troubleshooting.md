@@ -1,27 +1,27 @@
 ---
-title: ログ出力とトラブルシューティング
-description: エラー表示・詳細ログの出し方と、よくあるエラーへの対処。
+title: Logging and troubleshooting
+description: How errors and verbose logs are displayed, and how to fix common errors.
 sidebar:
   order: 5
 ---
 
-## ログ出力・エラー表示
+## Logging and error output
 
-- 致命的エラーが発生した場合、標準エラーへ `Error: <メッセージ>` を赤文字（TTY接続時のみ。パイプ/リダイレクト時は色なし）の1行だけで表示します。AWS SDK内部のエラー型構造のダンプ等は表示しません。
-- `--verbose`（`--debug` でも同義）を指定すると、AWS SDK / 内部クレートが出す詳細ログ（認証プロバイダの解決過程など）を標準エラーへそのまま出力します。指定しない場合、これらの生ログは抑制され、`cwsweep` 自身の警告のみが表示されます。`--verbose` / `--debug` はサブコマンドの前後どちらに置いても有効です（例: `cwsweep scan --verbose` / `cwsweep --debug clean`）。
-- `RUST_LOG` 環境変数が設定されている場合は、`--verbose` の有無に関わらずそちらを優先します。
+- On a fatal error, cwsweep prints a single line `Error: <message>` to stderr, in red (only when attached to a TTY; no color when piped or redirected). Internal AWS SDK error structures are not dumped.
+- With `--verbose` (`--debug` is a synonym), detailed logs from the AWS SDK and internal crates (such as how the credential provider was resolved) are written to stderr as is. Without it, these raw logs are suppressed and only cwsweep's own warnings are shown. `--verbose` / `--debug` work either before or after the subcommand (e.g. `cwsweep scan --verbose` / `cwsweep --debug clean`).
+- If the `RUST_LOG` environment variable is set, it takes precedence regardless of `--verbose`.
 
 ```bash
-# 認証エラーの詳細を確認したい場合
+# To see the details of an authentication error
 cwsweep scan --regions us-west-2 --verbose
 ```
 
-## よくあるエラー
+## Common errors
 
 ### `WARN profile [xxx] ignored; sections ... must have a prefix i.e. [profile my-profile]`
 
-`~/.aws/config` のセクション名が `[xxx]` になっています。AWS SDK は `default` 以外のプロファイルに `profile` プレフィックスを要求するため、`[profile xxx]` に書き換えてください（`~/.aws/credentials` 側は `[xxx]` のままで構いません）。
+A section in `~/.aws/config` is named `[xxx]`. The AWS SDK requires the `profile` prefix for every profile other than `default`, so rename it to `[profile xxx]` (sections in `~/.aws/credentials` can stay as `[xxx]`).
 
 ### `ProfileFile provider could not be built: ... the credentials-login feature must be enabled`
 
-`aws login` で作成した `login_session_arn` 付きプロファイルは `aws-config` の`credentials-login` フィーチャが必要です。現行のソースでは有効化済みなので、このエラーが出る場合は古いバイナリを使っています。最新版を再インストールしてください。
+Profiles created by `aws login` with a `login_session_arn` require the `credentials-login` feature of `aws-config`. The current source has it enabled, so if you see this error you are running an old binary. Reinstall the latest version.

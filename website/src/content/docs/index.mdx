@@ -1,11 +1,11 @@
 ---
 title: cwsweep
-description: AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択したロググループを安全に削除・retention変更するRust製CLI。
+description: A Rust CLI that inventories CloudWatch Logs across an entire AWS Organization and safely deletes or changes the retention of interactively selected log groups.
 template: splash
 hero:
-  tagline: AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択したロググループを安全に削除・retention変更するRust製CLI。
+  tagline: A Rust CLI that inventories CloudWatch Logs across an entire AWS Organization and safely deletes or changes the retention of interactively selected log groups.
   actions:
-    - text: はじめる
+    - text: Get started
       link: /getting-started/
       icon: right-arrow
     - text: GitHub
@@ -17,16 +17,16 @@ hero:
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid>
-	<Card title="Organization全体を一括棚卸し" icon="magnifier">
-		管理アカウントの認証情報から全メンバーアカウントへ AssumeRole し、指定リージョンのロググループを集計します。
+	<Card title="Inventory the whole Organization" icon="magnifier">
+		Starting from the management account's credentials, cwsweep assumes a role into every member account and aggregates log groups in the regions you specify.
 	</Card>
-	<Card title="dry-run が既定" icon="approve-check">
-		`--execute` を明示しない限り、`delete-log-group` / `put-retention-policy` は一切呼び出されません。
+	<Card title="Dry-run by default" icon="approve-check">
+		Unless you explicitly pass `--execute`, `delete-log-group` and `put-retention-policy` are never called.
 	</Card>
-	<Card title="二重の Identity 検証" icon="seti:lock">
-		スキャン時と実行直前の2回、`sts:get-caller-identity` でアカウントIDの一致を検証します。
+	<Card title="Double identity verification" icon="seti:lock">
+		The account ID is verified with `sts:get-caller-identity` twice: at scan time and again right before execution.
 	</Card>
-	<Card title="監査ログを必ず記録" icon="document">
-		削除・retention変更は JSON Lines の監査ログに必ず記録され、書き込みに失敗した操作は中断されます。
+	<Card title="Audit log is always written" icon="document">
+		Every deletion and retention change is recorded in a JSON Lines audit log, and any operation whose log entry cannot be written is aborted.
 	</Card>
 </CardGrid>

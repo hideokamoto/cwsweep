@@ -1,37 +1,37 @@
 ---
-title: scan — 棚卸し
-description: ロググループを読み取り専用で棚卸しする。
+title: scan — Inventory
+description: Inventory log groups in read-only mode.
 sidebar:
   order: 1
 ---
 
-ロググループを表形式で表示して終了します。対話式の選択・確認へは進まず、監査ログも書きません。
+Prints log groups as a table and exits. It does not proceed to interactive selection or confirmation, and it does not write the audit log.
 
 ```bash
 cwsweep scan --regions us-east-1,us-west-2
 
-# 出力フォーマットをJSONに切り替える（Cursor/Claude Code等のCLIエージェント向け）
+# Switch the output format to JSON (for CLI agents such as Cursor or Claude Code)
 cwsweep scan --regions us-east-1 --output json
 
-# メンバーアカウントへAssumeRoleする際のロール名を上書きする（既定: OrganizationAccountAccessRole）
+# Override the role name used when assuming into member accounts (default: OrganizationAccountAccessRole)
 cwsweep scan --regions us-east-1 --role-name CustomOrgRole
 
-# 商用パーティションの全リージョンを対象にする（大文字小文字は区別しない）。
-# 対象リージョン数を標準エラーへ表示し、TTYでは実行前に確認を求める
+# Target every region in the commercial partition (case-insensitive).
+# The number of target regions is printed to stderr, and on a TTY you are asked to confirm first
 cwsweep scan --regions all
 
-# --regions を省略すると、TTYでは account:ListRegions の結果からマルチセレクトで選択する。
-# 非TTY（CI/パイプ）ではAWSへ接続せずエラー終了する
+# If --regions is omitted, on a TTY you pick regions from a multi-select built from account:ListRegions.
+# On a non-TTY (CI/pipes) it exits with an error without connecting to AWS
 cwsweep scan
 ```
 
-## リージョンの指定方法
+## Specifying regions
 
-| 指定 | 挙動 |
+| Input | Behavior |
 |---|---|
-| `--regions us-east-1,ap-northeast-1` | 指定したリージョンのみを対象にする |
-| `--regions all`（`ALL` / `All` も可） | 管理アカウントの資格情報で `account:ListRegions` を呼び、商用パーティション（`aws`）で有効化済みの全リージョンを対象にする。GovCloud・中国リージョン、未有効化のオプトインリージョンは除外。件数と一覧を標準エラーへ表示し、TTYでは確認（既定: No）を取る |
-| 未指定・TTY | 同じ列挙結果から対話式マルチセレクトで選択する。0件選択はエラー |
-| 未指定・非TTY | 「`--regions` を指定してください」というエラーで終了する（AWSへは接続しない） |
+| `--regions us-east-1,ap-northeast-1` | Targets only the listed regions |
+| `--regions all` (`ALL` / `All` also accepted) | Calls `account:ListRegions` with the management account's credentials and targets every enabled region in the commercial partition (`aws`). GovCloud, China regions, and opt-in regions that are not enabled are excluded. The count and list are printed to stderr, and on a TTY you are asked to confirm (default: No) |
+| Omitted, TTY | Pick regions from the same list via an interactive multi-select. Selecting zero regions is an error |
+| Omitted, non-TTY | Exits with an error asking you to specify `--regions` (does not connect to AWS) |
 
-リージョンの指定方法は `clean` / `retention set` でも共通です。
+Region selection works the same way for `clean` and `retention set`.
