@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 // GitHub Pages + カスタムドメイン（public/CNAME）で配信するため base は設定しない。
 export default defineConfig({
@@ -15,6 +16,26 @@ export default defineConfig({
 				root: { label: 'English', lang: 'en' },
 				ja: { label: '日本語', lang: 'ja' },
 			},
+			// llms.txt v2: 全ページから /llms.txt を rel="describedby" で示す。
+			// https://llmstxt.org/changes.html
+			head: [
+				{ tag: 'link', attrs: { rel: 'describedby', href: '/llms.txt' } },
+			],
+			plugins: [
+				starlightLlmsTxt({
+					projectName: 'cwsweep',
+					// 本文は英語（既定ロケール）のページから生成される。
+					details: [
+						'cwsweep is a CLI. Run `cwsweep --help` (every help ends with the docs URL) or read the pages below. Dry-run is the default; nothing is deleted or changed unless `--execute` is passed.',
+						'',
+						'An Agent Skill (https://agentskills.io/specification) that teaches an agent how to use cwsweep safely is published from the same repository:',
+						'',
+						'- Skill file: https://cwsweep.hidetaka.dev/skill.md',
+						'- Skill discovery index (Agent Skills Discovery RFC, draft): https://cwsweep.hidetaka.dev/.well-known/agent-skills/index.json',
+						'- Install: `npx skills add hideokamoto/cwsweep --skill cwsweep`',
+					].join('\n'),
+				}),
+			],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/hideokamoto/cwsweep' },
 			],
