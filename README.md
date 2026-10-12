@@ -104,7 +104,9 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
   実行時刻・成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。
   `--audit-log-path` で出力先を上書き可能）にJSON Linesで必ず記録する
   （無効化オプションなし）。監査ログの書き込みに失敗した場合、当該操作は中断される。
-  監査ログファイルは `clean` 開始時にオープンされる（`scan` は作成しない）。
+  `clean` / `retention set` は開始時に出力先（親ディレクトリが存在するか、通常のファイルか）を検証し、
+  ファイル自体は最初の書き込み時に作成する。1件の操作につき、API呼び出しの前に実行意図（`intent`）、
+  後に結果（`result`）の2行を追記する。dry-run（`--execute` なし）では何も追記せず、`scan` も作成しない。
 - 管理アカウント自身へはAssumeRoleせず現在の認証情報をそのまま使用し、メンバーアカウントに
   対してのみAssumeRoleする。
 - いずれかのAWSアカウントへのAPI呼び出しの直前（スキャン時、および削除・retention変更の実行
