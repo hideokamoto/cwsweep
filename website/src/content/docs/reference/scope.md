@@ -1,12 +1,12 @@
 ---
-title: スコープ制約
-description: cwsweep v1 が対象とする AWS パーティションの範囲。
+title: Scope
+description: The AWS partitions supported by cwsweep v1.
 sidebar:
   order: 2
 ---
 
-v1 は AWS 標準パーティション（`aws`、商用リージョン）のみを対象とします。
+v1 supports only the AWS standard partition (`aws`, commercial regions).
 
-Identity検証（`sts:get-caller-identity`）用のSTSクライアントは、グローバルサービスの性質上リージョンを `us-east-1` に固定しています。商用パーティション内であれば、どの `--regions` を指定してもそのまま機能します。
+Because STS is a global service, the STS client used for identity verification (`sts:get-caller-identity`) is pinned to `us-east-1`. Within the commercial partition, it works regardless of which `--regions` you specify.
 
-AWS GovCloud (US) や中国リージョン（`aws-us-gov` / `aws-cn` パーティション）など、非商用パーティションのメンバーアカウントに対する動作は v1 のスコープ外であり、動作確認していません。
+Behavior against member accounts in non-commercial partitions, such as AWS GovCloud (US) and China regions (`aws-us-gov` / `aws-cn` partitions), is out of scope for v1 and has not been tested.

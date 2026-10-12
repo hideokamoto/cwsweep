@@ -1,39 +1,39 @@
 ---
-title: はじめに
-description: cwsweep のインストールと最初のスキャン。
+title: Getting started
+description: Installing cwsweep and running your first scan.
 ---
 
-## インストール
+## Installation
 
-[GitHub Releases](https://github.com/hideokamoto/cwsweep/releases) から、使っている環境（Linux / macOS、x86_64 / arm64）向けのバイナリをダウンロードしてください。
+Download the binary for your platform (Linux / macOS, x86_64 / arm64) from [GitHub Releases](https://github.com/hideokamoto/cwsweep/releases).
 
-ソースからビルドする場合は、Rust ツールチェーンを用意したうえで次を実行します。
+To build from source, install the Rust toolchain and run:
 
 ```bash
 cargo install --git https://github.com/hideokamoto/cwsweep --locked
 ```
 
-## 前提
+## Prerequisites
 
-- AWS Organizations の**管理アカウント**の認証情報で実行します。管理アカウント自身へはAssumeRole せず、現在の認証情報をそのまま使います。
-- メンバーアカウントへは AssumeRole します。既定のロール名は `OrganizationAccountAccessRole` で、`--role-name` で上書きできます。
-- 対象は AWS 標準パーティション（`aws`、商用リージョン）のみです。詳しくは[スコープ制約](/reference/scope/) を参照してください。
+- Run cwsweep with the credentials of the AWS Organizations **management account**. cwsweep does not assume a role into the management account itself; it uses your current credentials as is.
+- cwsweep assumes a role into each member account. The default role name is `OrganizationAccountAccessRole`, which you can override with `--role-name`.
+- Only the AWS standard partition (`aws`, commercial regions) is supported. See [Scope](/reference/scope/) for details.
 
-## 最初のスキャン
+## Your first scan
 
-まずは読み取り専用の `scan` で棚卸しします。`scan` はロググループを表形式で表示して終了し、削除やretention変更に到達する経路を持ちません。
+Start with the read-only `scan` subcommand. `scan` prints log groups as a table and exits; it has no code path that can reach deletion or retention changes.
 
 ```bash
 cwsweep scan --regions us-east-1,us-west-2
 ```
 
-## サブコマンド
+## Subcommands
 
-| サブコマンド | 役割 | AWSへの書き込み |
+| Subcommand | Purpose | Writes to AWS |
 |---|---|---|
-| [`scan`](/guides/scan/) | 棚卸し（表示のみ） | なし |
-| [`clean`](/guides/clean/) | 対話式に選択して削除・retention変更 | `--execute` 指定時のみ |
-| [`retention set`](/guides/retention/) | 全ロググループへ retention 日数を一律設定 | `--execute` 指定時のみ（削除なし） |
-| [`audit`](/guides/audit/) | 監査ログの閲覧 | なし（AWSに接続しない） |
+| [`scan`](/guides/scan/) | Inventory (display only) | No |
+| [`clean`](/guides/clean/) | Interactively select log groups to delete or change retention | Only with `--execute` |
+| [`retention set`](/guides/retention/) | Set the same retention period on all log groups | Only with `--execute` (never deletes) |
+| [`audit`](/guides/audit/) | View the audit log | No (does not connect to AWS) |
 
-サブコマンドを省略した呼び出しはエラーになります。
+Invoking cwsweep without a subcommand is an error.

@@ -1,0 +1,32 @@
+---
+title: cwsweep
+description: AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択したロググループを安全に削除・retention変更するRust製CLI。
+template: splash
+hero:
+  tagline: AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択したロググループを安全に削除・retention変更するRust製CLI。
+  actions:
+    - text: はじめる
+      link: /ja/getting-started/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/hideokamoto/cwsweep
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+	<Card title="Organization全体を一括棚卸し" icon="magnifier">
+		管理アカウントの認証情報から全メンバーアカウントへ AssumeRole し、指定リージョンのロググループを集計します。
+	</Card>
+	<Card title="dry-run が既定" icon="approve-check">
+		`--execute` を明示しない限り、`delete-log-group` / `put-retention-policy` は一切呼び出されません。
+	</Card>
+	<Card title="二重の Identity 検証" icon="seti:lock">
+		スキャン時と実行直前の2回、`sts:get-caller-identity` でアカウントIDの一致を検証します。
+	</Card>
+	<Card title="監査ログを必ず記録" icon="document">
+		削除・retention変更は JSON Lines の監査ログに必ず記録され、書き込みに失敗した操作は中断されます。
+	</Card>
+</CardGrid>

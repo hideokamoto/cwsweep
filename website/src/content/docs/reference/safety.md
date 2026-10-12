@@ -1,19 +1,19 @@
 ---
-title: 安全機構
-description: 誤削除・誤操作を防ぐための cwsweep の安全機構と終了コード方針。
+title: Safety
+description: cwsweep's safety mechanisms against accidental deletion and misoperation, and its exit code policy.
 sidebar:
   order: 1
 ---
 
-- `--regions` を省略した場合、暗黙に全リージョンをスキャンすることはありません。TTYでは対話式に選択させ、非TTY（CI/パイプ）ではエラー終了します。全リージョンを対象にするには `--regions all`を明示する必要があり、その場合も対象件数を表示してTTYでは確認を取ります（誤って無関係なリージョンをスキャンする事故を防ぐため）。
-- `clean --execute` / `retention set --execute` を渡さない限り、`delete-log-group` /`put-retention-policy` は一切呼び出されません（dry-run既定）。`scan` と `audit` はこれらのAPIに到達する経路を持たず、`retention set` は `delete-log-group` に到達する経路を持ちません。
-- 対話式マルチセレクトの初期状態は常に全チェックOFFです。
-- 削除・retention変更を伴う操作は、対象アカウントID・リージョン・ロググループ名・実行時刻・成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。`--audit-log-path` で出力先を上書き可能）にJSON Linesで必ず記録します（無効化オプションなし）。監査ログの書き込みに失敗した場合、当該操作は中断されます。監査ログファイルは `clean` 開始時にオープンされます（`scan` は作成しません）。
-- 管理アカウント自身へはAssumeRoleせず現在の認証情報をそのまま使用し、メンバーアカウントに対してのみAssumeRoleします。
-- いずれかのAWSアカウントへのAPI呼び出しの直前（スキャン時、および削除・retention変更の実行直前の二重目）に `sts:get-caller-identity` でアカウントID一致を検証し、不一致の場合は当該アカウントの処理を即座に失敗させます。
+- Omitting `--regions` never silently scans every region. On a TTY you choose regions interactively; on a non-TTY (CI/pipes) it exits with an error. To target every region you must pass `--regions all` explicitly, and even then the number of targets is shown and, on a TTY, you are asked to confirm (to prevent accidentally scanning unrelated regions).
+- Unless you pass `clean --execute` / `retention set --execute`, `delete-log-group` / `put-retention-policy` are never called (dry-run by default). `scan` and `audit` have no code path that reaches these APIs, and `retention set` has no code path that reaches `delete-log-group`.
+- The interactive multi-select always starts with every item unchecked.
+- Every operation that deletes or changes retention is always recorded in the audit log as JSON Lines — target account ID, region, log group name, execution time, and success/failure (default: `cwsweep-audit.jsonl` in the current directory; override with `--audit-log-path`). There is no option to disable it. If writing to the audit log fails, the operation is aborted. The audit log file is opened when `clean` starts (`scan` never creates it).
+- cwsweep does not assume a role into the management account itself and uses your current credentials as is; it assumes a role only into member accounts.
+- Immediately before any API call to an AWS account (at scan time, and a second time right before deletion or retention changes), the account ID is verified with `sts:get-caller-identity`. On a mismatch, processing for that account fails immediately.
 
-## 終了コード方針（CI/自動化向け）
+## Exit code policy (for CI/automation)
 
-`scan` / `clean` で対象アカウント×リージョンの組み合わせが1件以上あり、かつその全件でスキャンが失敗した場合、`cwsweep` は非ゼロ終了コードで終了します（標準エラーへの警告ログに加え、この場合は正常な「0件」メッセージを表示しません）。
+For `scan` / `clean`, if there is at least one target account × region combination and the scan fails for all of them, `cwsweep` exits with a non-zero exit code (in addition to warning logs on stderr, it does not print the normal "0 results" message in this case).
 
-1件でも成功した組み合わせがあれば、他が失敗していても終了コードは0（正常終了）とし、失敗したアカウント/リージョンは個別に警告ログへ出力するのみとします。これにより「スキャンが全滅した」場合と「本当に対象ロググループが0件だった」場合を、呼び出し元が終了コードだけで区別できます。
+If at least one combination succeeds, the exit code is 0 (success) even if others fail; failed accounts/regions are only reported individually in warning logs. This lets callers distinguish "every scan failed" from "there really were zero target log groups" by the exit code alone.

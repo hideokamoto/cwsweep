@@ -8,10 +8,12 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'cwsweep',
-			description: 'AWS Organization全体のCloudWatch Logsを棚卸しし、安全に削除・retention変更するRust製CLI',
+			description: 'A Rust CLI that inventories CloudWatch Logs across an entire AWS Organization and safely deletes or changes their retention',
+			// 英語をルート（/）に置き、日本語は /ja/ 配下で配信する。
 			defaultLocale: 'root',
 			locales: {
-				root: { label: '日本語', lang: 'ja' },
+				root: { label: 'English', lang: 'en' },
+				ja: { label: '日本語', lang: 'ja' },
 			},
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/hideokamoto/cwsweep' },
@@ -20,9 +22,21 @@ export default defineConfig({
 				baseUrl: 'https://github.com/hideokamoto/cwsweep/edit/main/website/',
 			},
 			sidebar: [
-				{ label: 'はじめに', items: ['getting-started'] },
-				{ label: 'ガイド', items: [{ autogenerate: { directory: 'guides' } }] },
-				{ label: 'リファレンス', items: [{ autogenerate: { directory: 'reference' } }] },
+				{
+					label: 'Introduction',
+					translations: { ja: 'はじめに' },
+					items: ['getting-started'],
+				},
+				{
+					label: 'Guides',
+					translations: { ja: 'ガイド' },
+					items: [{ autogenerate: { directory: 'guides' } }],
+				},
+				{
+					label: 'Reference',
+					translations: { ja: 'リファレンス' },
+					items: [{ autogenerate: { directory: 'reference' } }],
+				},
 			],
 		}),
 	],
