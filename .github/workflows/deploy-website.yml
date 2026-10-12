@@ -1,6 +1,8 @@
 # website/ (Astro Starlight) を GitHub Pages へデプロイする。
 # 公式例: https://docs.astro.build/en/guides/deploy/github/
 # カスタムドメインは website/public/CNAME（cwsweep.hidetaka.dev）で指定する。
+# withastro/action@v6 は upload-pages-artifact に include-hidden-files: true を渡すため、
+# .well-known/ もアップロードされる（https://github.com/withastro/action/blob/v6/action.yml）。
 name: Deploy website to GitHub Pages
 
 on:
@@ -8,6 +10,9 @@ on:
     branches: [main]
     paths:
       - "website/**"
+      # /skill.md と /.well-known/agent-skills/ は skills/ をビルド時に読み込んで配信する。
+      # skills/ だけを変えたときもサイトを再デプロイする。
+      - "skills/**"
       - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
 

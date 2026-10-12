@@ -24,16 +24,38 @@ use crate::planner::{ActionKind, ActionPlanner, PlannedAction};
 use crate::scanner::{DescribeLogGroupsOperations, LogGroupScanner};
 use crate::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem};
 
+const ROOT_LONG_ABOUT: &str = "\
+AWS Organization全体のCloudWatch Logsを棚卸しし、選択したロググループの削除・retention変更を行う。
+
+認証情報:
+  AWS SDKの既定の認証情報解決チェーン（環境変数・プロファイル・SSO等）で解決した、Organizationの
+  管理アカウントの認証情報で実行する。管理アカウント自身にはAssumeRoleせず、その認証情報をそのまま使う。
+  Organization内のActiveなメンバーアカウントにだけ、--role-name のロールへAssumeRoleする。
+  Organizationのメンバーでないアカウントで実行した場合は、そのアカウントだけを対象にする。
+  対象はAWS標準パーティション（商用リージョン）のみ。
+
+安全機構:
+  --execute を付けない限り、ロググループの削除もretention変更も行わない（dry-run既定）。
+  AWS APIを呼ぶ直前にアカウントIDを sts:GetCallerIdentity で検証し、不一致ならそのアカウントの処理を失敗させる。
+
+終了コード:
+  致命的エラーは標準エラーに `Error: <メッセージ>` を表示して終了コード1で終了する。
+  scan / clean / retention set で、対象のアカウント×リージョンが1件以上あり、その全件のスキャンが失敗した場合も
+  終了コード1になる。1件でも成功すれば、他が失敗していても0で終了する（失敗分は警告として標準エラーに出る）。";
+
 /// cwsweep CLI引数。サブコマンド未指定はパースエラー（BR1.1）。
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "cwsweep",
     version,
-    about = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI"
+    about = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI",
+    long_about = ROOT_LONG_ABOUT,
+    after_help = "詳細: https://cwsweep.hidetaka.dev/"
 )]
 pub struct Cli {
-    /// AWS SDK / 内部処理の詳細ログをそのまま標準エラーへ出力する（`--debug`も同義）。
-    /// 指定しない場合、標準エラーには自身の警告のみを表示し、外部クレートの生ログは抑制する。
+    /// AWS SDK / 内部処理の詳細ログを標準エラーへ出力する（`--debug`も同義）。
+    ///
+    /// 指定しない場合、標準エラーにはcwsweep自身の警告のみを表示し、AWS SDKなど外部クレートのログは抑制する。サブコマンドの前後どちらにも置ける。環境変数 RUST_LOG が設定されている場合は、このフラグの有無に関わらず RUST_LOG が優先される。
     #[arg(long, alias = "debug", global = true)]
     pub verbose: bool,
 
@@ -44,12 +66,38 @@ pub struct Cli {
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// ロググループを棚卸しして表示する（読み取り専用。監査ログは書かない）。
+    ///
+    /// 各アカウント×リージョンのロググループを、アカウントID・リージョン・ロググループ名・保存バイト数・retention日数の一覧で表示して終了する。対話式の選択や確認には進まず、ロググループの削除もretention変更も行わず、監査ログも作成しない。
+    ///
+    /// 一部のアカウント×リージョンでスキャンに失敗しても、他が成功していれば終了コード0で終了する（失敗分は警告として標準エラーに出る）。全件失敗した場合のみ終了コード1になる。
+    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/scan/")]
     Scan(ScanArgs),
-    /// スキャン→選択→確認→（--execute時のみ）実行。監査ログを必ず記録する。
+    /// スキャンしたロググループを対話式に選び、削除またはretention変更を行う（--execute指定時のみ実行）。
+    ///
+    /// 流れ:
+    ///   1. スキャン結果を一覧表示する（0件ならそこで終了する）。
+    ///   2. マルチセレクトで対象を選ぶ（初期状態は全てOFF）。
+    ///   3. アクション（delete または set-retention。set-retentionでは日数も入力）を選ぶ。
+    ///   4. 対象アカウントID・リージョン・ロググループ名・合計バイト数を再掲した確認画面で承認する（既定はNo）。
+    ///   5. --execute を指定した場合だけ実行する。未指定（dry-run）ではAWS APIを呼ばず、各対象を skipped と表示する。
+    ///
+    /// 標準入力がTTYでない場合（パイプ・CI等）は、スキャン結果を表示して警告を出し、選択以降へ進まずに終了コード0で終了する（--execute を付けても何も実行されない）。非対話環境の棚卸しには `scan` を使う。
+    ///
+    /// 実行時は、対象ごとにAPI呼び出しの直前へ sts:GetCallerIdentity によるアカウントID再検証を行い、不一致なら残りの計画全体を中断する。監査ログには、API呼び出しの前に実行意図（intent）、後に結果（result）を1行ずつ追記する。いずれかの書き込みに失敗した場合は処理を中断する。dry-runでは監査ログへ何も追記しない。
+    #[command(
+        verbatim_doc_comment,
+        after_help = "詳細: https://cwsweep.hidetaka.dev/guides/clean/"
+    )]
     Clean(CleanArgs),
     /// 監査ログ（JSON Lines）を読み取り専用で表示する。
+    ///
+    /// AWSには接続せず、監査ログを書き換えない。ファイルが存在しない場合は空の結果で正常終了する。解釈できない行は、行番号つきの警告を標準エラーに出してスキップし、残りの行は表示する。
+    ///
+    /// 削除・retention変更1件につき2行（event が intent の実行意図と、result の結果）が記録される。intent 行の success は結果が未確定のプレースホルダで、表では `-` と表示される。
+    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/audit/")]
     Audit(AuditArgs),
     /// retention（保持期間）に関する操作。削除は一切行わない。
+    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/retention/")]
     Retention(RetentionArgs),
 }
 
@@ -62,43 +110,69 @@ pub struct RetentionArgs {
 /// `cwsweep retention <sub>`。将来 `get` / `clear` 等を追加する拡張点。
 #[derive(Subcommand, Debug, Clone)]
 pub enum RetentionCommands {
-    /// スキャンで見つかった全ロググループに一律のretention日数を設定する
-    /// （--execute時のみ実行。削除は行わない。監査ログを必ず記録する）。
+    /// スキャンで見つかった全ロググループに一律のretention日数を設定する（--execute指定時のみ実行。削除は行わない）。
+    ///
+    /// `clean` と違って対話式の選択は行わず、スキャンで見つかった全ロググループが対象になる。--days が許容値でない場合は、AWSへ接続する前にエラーで終了する。
+    ///
+    /// 標準入力がTTYの場合は、対象一覧を再掲した確認画面で承認する（既定はNo）。TTYでない場合は確認なしの dry-run だけを実行でき、--execute を付けるとエラーで終了する。
+    ///
+    /// 実行時の再検証（sts:GetCallerIdentity）と監査ログへの追記（実行意図と結果の2行）は `clean` と同じ。dry-runでは監査ログへ何も追記しない。
+    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/retention/")]
     Set(SetRetentionArgs),
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct SetRetentionArgs {
-    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
-    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    ///
+    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    ///
+    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    ///
+    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名。
+    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    ///
+    /// 管理アカウント自身には使わない。
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
-    /// 設定するretention日数（CloudWatch Logsが許容する離散値のみ）。
+    /// 設定するretention日数（必須）。CloudWatch Logsが許容する離散値のみ。
+    ///
+    /// 許容値: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653。
     #[arg(long)]
     pub days: i32,
 
-    /// このフラグを明示的に指定しない限り、put-retention-policy は呼び出されない（dry-run既定）。
+    /// 指定した場合だけ put-retention-policy を実行する（未指定はdry-run）。
+    ///
+    /// 標準入力がTTYでない場合は、このフラグを付けるとエラーで終了する。
     #[arg(long, default_value_t = false)]
     pub execute: bool,
 
-    /// 監査ログ（JSON Lines）の出力先パス。無効化するオプションは存在しない。
+    /// 監査ログ（JSON Lines）の追記先パス。無効化するオプションは存在しない。
+    ///
+    /// ファイルが存在しなければ最初の書き込み時に作成し、存在すれば末尾へ追記する。親ディレクトリは存在している必要があり、無い場合や通常のファイルでない場合は起動時にエラーで終了する。
     #[arg(long, default_value = "cwsweep-audit.jsonl")]
     pub audit_log_path: std::path::PathBuf,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct ScanArgs {
-    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
-    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    ///
+    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    ///
+    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    ///
+    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名。
+    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    ///
+    /// 管理アカウント自身には使わない。
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
@@ -109,22 +183,31 @@ pub struct ScanArgs {
 
 #[derive(Args, Debug, Clone)]
 pub struct CleanArgs {
-    /// 対象リージョン（カンマ区切りまたは複数回指定）。`all` で商用全リージョン。
-    /// 未指定かつ標準入力がTTYの場合は対話式に選択する（非TTYではエラー）。
+    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    ///
+    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    ///
+    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    ///
+    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名。
+    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    ///
+    /// 管理アカウント自身には使わない。
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
-    /// このフラグを明示的に指定しない限り、delete-log-group / put-retention-policy は
-    /// 一切呼び出されない（dry-run既定）。
+    /// 指定した場合だけ delete-log-group / put-retention-policy を実行する（未指定はdry-run）。
+    ///
+    /// 標準入力がTTYでない場合は、このフラグを付けても選択以降へ進まないため何も実行されない。
     #[arg(long, default_value_t = false)]
     pub execute: bool,
 
-    /// 監査ログ（JSON Lines）の出力先パス。無効化するオプションは存在しない
-    /// （project.md Mandated）。
+    /// 監査ログ（JSON Lines）の追記先パス。無効化するオプションは存在しない。
+    ///
+    /// ファイルが存在しなければ最初の書き込み時に作成し、存在すれば末尾へ追記する。親ディレクトリは存在している必要があり、無い場合や通常のファイルでない場合は起動時にエラーで終了する。
     #[arg(long, default_value = "cwsweep-audit.jsonl")]
     pub audit_log_path: std::path::PathBuf,
 }
@@ -685,6 +768,7 @@ impl CliApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::planner::ALLOWED_RETENTION_DAYS;
 
     fn scan_args(cli: Cli) -> ScanArgs {
         match cli.command {
@@ -1987,6 +2071,101 @@ mod tests {
         assert_eq!(
             format_outcome_line(&outcome(false, Some("boom"), false)),
             "111111111111/us-east-1//a: failed: boom"
+        );
+    }
+
+    // --- ヘルプ文と実装の整合 ---
+
+    fn render_help(path: &[&str], long: bool) -> String {
+        use clap::CommandFactory;
+        let mut cmd = Cli::command();
+        let mut cur = &mut cmd;
+        for name in path {
+            cur = cur
+                .find_subcommand_mut(name)
+                .unwrap_or_else(|| panic!("subcommand {name} not found"));
+        }
+        let help = if long {
+            cur.render_long_help()
+        } else {
+            cur.render_help()
+        };
+        help.to_string()
+    }
+
+    const HELP_PATHS: &[&[&str]] = &[
+        &[],
+        &["scan"],
+        &["clean"],
+        &["audit"],
+        &["retention"],
+        &["retention", "set"],
+    ];
+
+    #[test]
+    fn every_help_ends_with_the_docs_site_url() {
+        for path in HELP_PATHS {
+            for long in [false, true] {
+                let help = render_help(path, long);
+                let last = help.trim_end().lines().last().unwrap_or_default();
+                assert!(
+                    last.starts_with("詳細: https://cwsweep.hidetaka.dev/"),
+                    "help for {path:?} (long={long}) must end with the docs URL, got: {last}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn retention_set_help_lists_exactly_the_allowed_days() {
+        let help = render_help(&["retention", "set"], true);
+        let listed = ALLOWED_RETENTION_DAYS
+            .iter()
+            .map(|d| d.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert!(
+            help.contains(&format!("許容値: {listed}。")),
+            "--days help must list ALLOWED_RETENTION_DAYS exactly"
+        );
+    }
+
+    #[test]
+    fn help_states_the_defaults_that_the_parser_actually_uses() {
+        let cli = Cli::parse_from_args(["cwsweep", "clean"]).expect("parse");
+        let args = clean_args(cli);
+        assert_eq!(args.role_name, "OrganizationAccountAccessRole");
+        assert_eq!(
+            args.audit_log_path,
+            std::path::PathBuf::from("cwsweep-audit.jsonl")
+        );
+        assert!(!args.execute, "dry-run must be the default");
+        let help = render_help(&["clean"], true);
+        assert!(help.contains("[default: OrganizationAccountAccessRole]"));
+        assert!(help.contains("[default: cwsweep-audit.jsonl]"));
+    }
+
+    #[test]
+    fn regions_accepts_comma_space_and_repeated_forms_and_all_wins_in_the_resolver() {
+        for argv in [
+            vec!["cwsweep", "scan", "--regions", "us-east-1,us-west-2"],
+            vec!["cwsweep", "scan", "--regions", "us-east-1", "us-west-2"],
+            vec![
+                "cwsweep",
+                "scan",
+                "--regions",
+                "us-east-1",
+                "--regions",
+                "us-west-2",
+            ],
+        ] {
+            let args = scan_args(Cli::parse_from_args(argv).expect("parse"));
+            assert_eq!(args.regions, vec!["us-east-1", "us-west-2"]);
+        }
+        let mixed = vec!["us-east-1".to_string(), "ALL".to_string()];
+        assert_eq!(
+            crate::regions::region_spec(&mixed),
+            crate::regions::RegionSpec::All
         );
     }
 }

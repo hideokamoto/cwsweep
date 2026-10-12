@@ -104,7 +104,9 @@ cwsweep audit --audit-log-path /var/log/cwsweep/audit.jsonl --output json
   実行時刻・成功/失敗を監査ログ（既定: カレントディレクトリ直下 `cwsweep-audit.jsonl`。
   `--audit-log-path` で出力先を上書き可能）にJSON Linesで必ず記録する
   （無効化オプションなし）。監査ログの書き込みに失敗した場合、当該操作は中断される。
-  監査ログファイルは `clean` 開始時にオープンされる（`scan` は作成しない）。
+  `clean` / `retention set` は開始時に出力先（親ディレクトリが存在するか、通常のファイルか）を検証し、
+  ファイル自体は最初の書き込み時に作成する。1件の操作につき、API呼び出しの前に実行意図（`intent`）、
+  後に結果（`result`）の2行を追記する。dry-run（`--execute` なし）では何も追記せず、`scan` も作成しない。
 - 管理アカウント自身へはAssumeRoleせず現在の認証情報をそのまま使用し、メンバーアカウントに
   対してのみAssumeRoleする。
 - いずれかのAWSアカウントへのAPI呼び出しの直前（スキャン時、および削除・retention変更の実行
@@ -145,6 +147,27 @@ cwsweep scan --regions us-west-2 --verbose
   `credentials-login` フィーチャが必要。現行の `Cargo.toml` では有効化済みなので、
   このエラーが出る場合は古いバイナリを使っている。最新ソースから再ビルド／再インストールする。
 
+## Agent Skill / llms.txt
+
+AIコーディングエージェント向けのスキル（[Agent Skills 仕様](https://agentskills.io/specification)）を
+`skills/cwsweep/SKILL.md` に置いている。必ず先に `scan` を実行する、dry-run を既定として扱う、
+`--execute` での本実行は利用者の承認後に利用者の端末で行う、といった手順を伝える。
+
+```bash
+npx skills add hideokamoto/cwsweep --skill cwsweep
+```
+
+`--skill cwsweep` は必須。このリポジトリには AI-DLC の別スキル（`.claude/` と `.cursor/`）も含まれ、
+付けないとそれらも選択肢に出る。
+
+docs サイトは、同じスキルを `/skill.md` と `/.well-known/agent-skills/` で、ドキュメント全体を
+`/llms.txt`（`/llms-full.txt`・`/llms-small.txt`）で配信する（詳細は
+[サイトのガイド](https://cwsweep.hidetaka.dev/guides/agent-skill/)）。スキルはビルド時に
+`skills/` から読み込み、サイト側にコピーは持たない。
+
+**CLI を変更したら、スキルも更新する。** フラグ・既定値・retention の許容値・必要な Rust バージョンが
+`skills/cwsweep/SKILL.md` とずれると `cargo test`（`tests/skill_consistency.rs`）が失敗する。
+
 ## v0.1 からの移行
 
 v0.2.0 でトップレベルのフラグ方式を廃止し、サブコマンド方式へ移行した。旧形式は互換
@@ -171,6 +194,8 @@ v0.2.0 でトップレベルのフラグ方式を廃止し、サブコマンド�
   リージョン解決（例: `aws-us-gov` → `us-gov-west-1`）を別途実装する必要がある。
 
 ## 開発
+
+ビルドには Rust 1.94.1 以上が必要（`Cargo.toml` の `rust-version`。ロック済み依存が宣言する最大値）。
 
 ```bash
 # フォーマットチェック

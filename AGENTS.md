@@ -84,3 +84,26 @@ Commit the `aidlc/` workspace tree — the record (state, the per-clone audit sh
 - `aidlc/spaces/*/intents/*/runtime-graph.json` (also covers per-Bolt worktree fragments by relative-path glob)
 - `aidlc/spaces/*/intents/*/.aidlc-*` (the record's `.aidlc-engine/` framework state)
 <!-- END AI-DLC:agents -->
+
+## cwsweep: CLI・Agent Skill・docs を一緒に更新する
+
+<!-- 上の BEGIN/END で囲まれた AI-DLC の節は生成物。cwsweep 固有の規約はこの下に書く。 -->
+
+- **`--help` は `src/cli.rs` が唯一の情報源。** 書いた一文ごとに実装（`src/main.rs`・`src/cli.rs`・
+  `src/execution.rs`・`src/audit.rs`・`src/regions.rs`）の該当箇所を読み、条件や例外まで合っているか確かめる。
+  全ヘルプの末尾に docs サイトの URL（`https://cwsweep.hidetaka.dev/`）を置く（テストで担保）。
+- **CLI を変えたら、同じ変更で次も更新する:** `README.md`、`website/src/content/docs/`（英語と
+  `ja/` の両方）、`skills/cwsweep/SKILL.md`。フラグ・既定値・retention の許容値・`Cargo.toml` の
+  `rust-version` が SKILL.md や docs とずれると `cargo test` が失敗する（`tests/skill_consistency.rs`）。
+- **Agent Skill は `skills/cwsweep/SKILL.md`。** 仕様は https://agentskills.io/specification 。
+  検証: `uvx --from skills-ref agentskills validate skills/cwsweep`。
+  インストール: `npx skills add hideokamoto/cwsweep --skill cwsweep`（`--skill` を付けないと
+  AI-DLC の別スキルも選択肢に出る）。`skills/` は `Cargo.toml` の `exclude` で配布パッケージから除外している。
+- **docs サイトは SKILL.md をコピーしない。** `/skill.md` と `/.well-known/agent-skills/` は
+  `website/src/lib/skills.ts` が `skills/` をビルド時に読んで配信する。`skills/**` の変更でも
+  サイトが再デプロイされるよう、`.github/workflows/deploy-website.yml` の `paths` に含めている。
+- **リリース:** `main` への push で `Cargo.toml` の `version` が未リリースならリリースされる
+  （README「リリース」参照）。バージョンは手編集せず `cargo set-version` で上げる。
+  コミットメッセージの書式を定めた文書はリポジトリにない（履歴は日本語の自由形式）。
+- 変更前の確認: `cargo fmt --check` / `cargo clippy --all-targets --locked -- -D warnings` /
+  `cargo test --locked` / `(cd website && npm ci && npm run build)`。

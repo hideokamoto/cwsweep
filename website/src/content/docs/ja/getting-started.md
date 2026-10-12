@@ -7,7 +7,7 @@ description: cwsweep のインストールと最初のスキャン。
 
 [GitHub Releases](https://github.com/hideokamoto/cwsweep/releases) から、使っている環境（Linux / macOS、x86_64 / arm64）向けのバイナリをダウンロードしてください。
 
-ソースからビルドする場合は、Rust ツールチェーンを用意したうえで次を実行します。
+ソースからビルドする場合は、Rust 1.94.1 以上を用意したうえで次を実行します。
 
 ```bash
 cargo install --git https://github.com/hideokamoto/cwsweep --locked

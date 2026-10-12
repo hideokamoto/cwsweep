@@ -2,8 +2,14 @@
 name = "cwsweep"
 version = "0.2.1"
 edition = "2021"
+# ロック済み依存（aws-config 1.12.0 など）が宣言する rust-version の最大値。
+# 1.94.1 で `cargo check --locked --all-targets` が通ることを確認済み。
+rust-version = "1.94.1"
 description = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI"
 license = "MIT"
+# Agent Skill（skills/）は配布物に含めない。スキルは `npx skills add hideokamoto/cwsweep --skill cwsweep` と
+# docs サイトから配信する。skills/ を読むテストも一緒に除外する。
+exclude = ["/skills/", "/tests/skill_consistency.rs"]
 
 [[bin]]
 name = "cwsweep"

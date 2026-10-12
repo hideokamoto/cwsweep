@@ -19,8 +19,10 @@ cwsweep clean --regions us-east-1 --execute
 cwsweep clean --regions us-east-1 --audit-log-path /var/log/cwsweep/audit.jsonl
 ```
 
-- The interactive multi-select always starts with every item unchecked.
-- Before execution, a confirmation screen restates the target account IDs, regions, log group names, and total bytes.
+- The interactive multi-select always starts with every item unchecked. After selecting, you choose the action: `delete`, or `set-retention` (you then enter the number of days).
+- The confirmation defaults to No. Before execution, a confirmation screen restates the target account IDs, regions, log group names, and total bytes.
 - When stdin is not a TTY (pipes, CI, etc.), `clean` prints the scan results, warns that it cannot proceed to interactive selection, and exits successfully. Use [`scan`](/guides/scan/) for inventories in non-interactive environments.
+
+- With `--execute`, the account ID is verified again with `sts:GetCallerIdentity` immediately before each operation, and the audit log gets an `intent` line before the API call and a `result` line after it. A dry-run writes nothing to the audit log.
 
 See [Safety](/reference/safety/) for the full set of safety mechanisms.

@@ -7,7 +7,7 @@ description: Installing cwsweep and running your first scan.
 
 Download the binary for your platform (Linux / macOS, x86_64 / arm64) from [GitHub Releases](https://github.com/hideokamoto/cwsweep/releases).
 
-To build from source, install the Rust toolchain and run:
+To build from source, install Rust 1.94.1 or later and run:
 
 ```bash
 cargo install --git https://github.com/hideokamoto/cwsweep --locked
