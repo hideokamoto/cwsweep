@@ -8,13 +8,10 @@ parameters:
     type: boolean
     default: false
 
-orbs:
-  rust: circleci/rust@1.6.0
-
 executors:
   rust-executor:
     docker:
-      - image: cimg/rust:1.98.1
+      - image: cimg/rust:1.99.0
 
 commands:
   cargo-with-lock:
