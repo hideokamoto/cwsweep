@@ -25,6 +25,61 @@ commands:
           command: cargo <<parameters.subcommand>> --locked
 
 jobs:
+  # リリースは main へのマージ時に semantic-release がコミットメッセージから次バージョンを
+  # 決める（README「リリース」参照）。そのため、main に入る前にブランチ上の各コミットが
+  # Conventional Commits になっているかをここで検証する。
+  commitlint:
+    docker:
+      - image: cimg/node:24.22
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: "Install commitlint (without lifecycle scripts)"
+          command: |
+            set -euo pipefail
+            COMMITLINT_DIR="${HOME}/commitlint"
+            npm install --prefix "$COMMITLINT_DIR" --ignore-scripts --no-audit --no-fund \
+              @commitlint/cli@21.2.3 \
+              @commitlint/config-conventional@21.2.3
+            # extends は commitlint を実行するディレクトリから解決されるため、設定も
+            # インストール先に置く。subject-case と行長のルールは英語向けで、日本語の
+            # 件名（例: 「Rust を上げる」）や本文を誤って弾くので無効にする。型（feat / fix 等）と
+            # 「型: 件名」の形式はそのまま検証する。
+            cat > "${COMMITLINT_DIR}/commitlint.config.mjs" \<<'EOF'
+            export default {
+              extends: ['@commitlint/config-conventional'],
+              rules: {
+                'subject-case': [0],
+                'body-max-line-length': [0],
+                'footer-max-line-length': [0],
+              },
+            };
+            EOF
+      - run:
+          name: "Lint commit messages on this branch"
+          command: |
+            set -euo pipefail
+            git fetch origin main
+            REPO_DIR="$PWD"
+            COMMITS="$(git rev-list --no-merges origin/main..HEAD)"
+            if [ -z "$COMMITS" ]; then
+              echo "origin/main にないコミットはありません。"
+              exit 0
+            fi
+            cd "${HOME}/commitlint"
+            FAILED=0
+            for sha in $COMMITS; do
+              if ! git -C "$REPO_DIR" log -1 --format=%B "$sha" | ./node_modules/.bin/commitlint; then
+                echo "上のコミット ${sha} のメッセージが Conventional Commits ではありません。" >&2
+                FAILED=1
+              fi
+            done
+            if [ "$FAILED" -ne 0 ]; then
+              echo "例: 'feat: retention set に --dry-run を追加' / 'fix(cli): 非TTYで --execute を拒否する'。直し方は AGENTS.md の「コミットメッセージ」を参照。" >&2
+              exit 1
+            fi
+
   fmt:
     executor: rust-executor
     steps:
@@ -122,6 +177,10 @@ workflows:
   build-and-test:
     unless: << pipeline.parameters.run-weekly-security >>
     jobs:
+      - commitlint:
+          filters:
+            branches:
+              ignore: main
       - fmt
       - clippy
       - test
@@ -140,9 +199,10 @@ workflows:
           name: deny-advisories
           checks: "advisories"
 
-# リリース（main への push で、Cargo.toml の version が未リリースならクロスプラットフォームの
-# リリースバイナリをビルドし、vX.Y.Z タグ付きの GitHub Release を作成して添付する）は、
-# このリポジトリのパイプライン定義には含まれていない。hideokamoto/circleci-configurations の
-# workflows/release/rust-github-release.yaml を CircleCI の Config Sources 機能（複数パイプライン
-# 設定）で紐づけた、別のパイプライン定義（Pushes to default branch 起点）として実行する。
-# タグはそのパイプラインが自動作成するため手動で push しない。詳細は README.md の「リリース」節を参照。
+# リリース（main への push で、semantic-release が Conventional Commits から次バージョンを決め、
+# クロスプラットフォームのリリースバイナリをビルドし、vX.Y.Z タグ付きの GitHub Release を作成して
+# 添付する）は、このリポジトリのパイプライン定義には含まれていない。
+# hideokamoto/circleci-configurations の workflows/release/rust-github-semantic-release.yaml を
+# CircleCI の Config Sources 機能（複数パイプライン設定）で紐づけた、別のパイプライン定義
+# （Pushes to default branch 起点）として実行する。タグはそのパイプラインが自動作成するため
+# 手動で push しない。詳細は README.md の「リリース」節を参照。
