@@ -2,6 +2,12 @@
 
 このプロジェクトの注目すべき変更を記録する。形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に準拠する。
 
+## [Unreleased]
+
+### Changed
+
+- CLI の表示メッセージとヘルプを英語に統一。
+
 ## [0.2.0] - 2026-09-19
 
 ### Changed（破壊的変更）

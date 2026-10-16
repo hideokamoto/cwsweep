@@ -78,7 +78,7 @@ cwsweep audit --output json
 
 ## よくあるエラー
 
-- `--regions が指定されていません`: TTY でない環境で `--regions` を省略した。`--regions` を明示する。
+- `--regions was not specified`: TTY でない環境で `--regions` を省略した。`--regions` を明示する。
 - AssumeRole の失敗(AccessDenied など): 対象メンバーアカウントに、指定したロール名のロールがない可能性がある(招待で参加したアカウントなど)。`--role-name` を確認する。
 - アカウントIDの不一致: 認証情報の取得先が想定のアカウントではない。処理は失敗として扱われる。認証情報を確認する。
 - 認証情報や API の詳細を調べたいときは `--verbose`(`--debug` も同じ)を付ける。環境変数 `RUST_LOG` があればそちらが優先される。
