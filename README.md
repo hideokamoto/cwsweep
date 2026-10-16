@@ -36,7 +36,7 @@ cwsweep scan
 | `--regions us-east-1,ap-northeast-1` | 指定したリージョンのみを対象にする |
 | `--regions all`（`ALL` / `All` も可） | 管理アカウントの資格情報で `account:ListRegions` を呼び、商用パーティション（`aws`）で有効化済みの全リージョンを対象にする。GovCloud・中国リージョン、未有効化のオプトインリージョンは除外。件数と一覧を標準エラーへ表示し、TTYでは確認（既定: No）を取る |
 | 未指定・TTY | 同じ列挙結果から対話式マルチセレクトで選択する。0件選択はエラー |
-| 未指定・非TTY | 「`--regions` を指定してください」というエラーで終了する（AWSへは接続しない） |
+| 未指定・非TTY | 「`--regions was not specified. In non-interactive environments such as CI or pipes, specify --regions <region>[,<region>...] or --regions all.`」というエラーで終了する（AWSへは接続しない） |
 
 ### clean — 対話式に選択して削除・retention変更
 

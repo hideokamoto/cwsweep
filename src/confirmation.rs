@@ -223,7 +223,7 @@ mod tests {
         assert_eq!(
             distinct.len(),
             3,
-            "3件はすべて別々の対象として区別できるべき"
+            "all three records should be distinct targets"
         );
     }
 

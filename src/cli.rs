@@ -25,37 +25,39 @@ use crate::scanner::{DescribeLogGroupsOperations, LogGroupScanner};
 use crate::selector::{InteractiveSelector, MultiSelectPrompt, SelectableItem};
 
 const ROOT_LONG_ABOUT: &str = "\
-AWS Organization全体のCloudWatch Logsを棚卸しし、選択したロググループの削除・retention変更を行う。
+Inventory and manage CloudWatch Logs across an AWS Organization.
 
-認証情報:
-  AWS SDKの既定の認証情報解決チェーン（環境変数・プロファイル・SSO等）で解決した、Organizationの
-  管理アカウントの認証情報で実行する。管理アカウント自身にはAssumeRoleせず、その認証情報をそのまま使う。
-  Organization内のActiveなメンバーアカウントにだけ、--role-name のロールへAssumeRoleする。
-  Organizationのメンバーでないアカウントで実行した場合は、そのアカウントだけを対象にする。
-  対象はAWS標準パーティション（商用リージョン）のみ。
+Credentials:
+  Run cwsweep with the management account's credentials from the AWS SDK's default credential provider chain
+  (environment variables, profiles, SSO, etc.). cwsweep does not assume a role into the management account.
+  It assumes the role specified by --role-name in each active member account.
+  If the caller account is not part of an AWS Organization, only that account is targeted.
+  Only the AWS standard partition (commercial regions) is supported.
 
-安全機構:
-  --execute を付けない限り、ロググループの削除もretention変更も行わない（dry-run既定）。
-  AWS APIを呼ぶ直前にアカウントIDを sts:GetCallerIdentity で検証し、不一致ならそのアカウントの処理を失敗させる。
+Safety:
+  Log groups are never deleted and retention is never changed unless you pass --execute (dry-run by default).
+  Before each AWS API call, cwsweep verifies the account ID with sts:GetCallerIdentity. A mismatch fails
+  processing for that account.
 
-終了コード:
-  致命的エラーは標準エラーに `Error: <メッセージ>` を表示して終了コード1で終了する。
-  scan / clean / retention set で、対象のアカウント×リージョンが1件以上あり、その全件のスキャンが失敗した場合も
-  終了コード1になる。1件でも成功すれば、他が失敗していても0で終了する（失敗分は警告として標準エラーに出る）。";
+Exit codes:
+  Fatal errors print `Error: <message>` to stderr and exit with code 1.
+  For scan / clean / retention set, if there is at least one target account × region and all scans fail,
+  cwsweep exits with code 1. If any scan succeeds, it exits with code 0 and warns about failed scans.";
 
 /// cwsweep CLI引数。サブコマンド未指定はパースエラー（BR1.1）。
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "cwsweep",
     version,
-    about = "AWS Organization全体のCloudWatch Logs棚卸し・削除CLI",
+    about = "Inventory and manage CloudWatch Logs across an AWS Organization.",
     long_about = ROOT_LONG_ABOUT,
-    after_help = "詳細: https://cwsweep.hidetaka.dev/"
+    after_help = "Docs: https://cwsweep.hidetaka.dev/"
 )]
 pub struct Cli {
-    /// AWS SDK / 内部処理の詳細ログを標準エラーへ出力する（`--debug`も同義）。
+    /// Print detailed AWS SDK and internal processing logs to stderr. Also available as `--debug`.
     ///
-    /// 指定しない場合、標準エラーにはcwsweep自身の警告のみを表示し、AWS SDKなど外部クレートのログは抑制する。サブコマンドの前後どちらにも置ける。環境変数 RUST_LOG が設定されている場合は、このフラグの有無に関わらず RUST_LOG が優先される。
+    /// By default, only cwsweep warnings are printed to stderr; logs from external crates such as the AWS SDK
+    /// are suppressed. This option works before or after a subcommand. `RUST_LOG` takes precedence when set.
     #[arg(long, alias = "debug", global = true)]
     pub verbose: bool,
 
@@ -65,39 +67,48 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
-    /// ロググループを棚卸しして表示する（読み取り専用。監査ログは書かない）。
+    /// Inventory log groups and display them (read-only; does not write an audit log).
     ///
-    /// 各アカウント×リージョンのロググループを、アカウントID・リージョン・ロググループ名・保存バイト数・retention日数の一覧で表示して終了する。対話式の選択や確認には進まず、ロググループの削除もretention変更も行わず、監査ログも作成しない。
+    /// Prints a table of log groups with account ID, region, log group name, stored bytes, and retention days,
+    /// then exits. It does not proceed to interactive selection or confirmation, delete log groups, change
+    /// retention, or write the audit log.
     ///
-    /// 一部のアカウント×リージョンでスキャンに失敗しても、他が成功していれば終了コード0で終了する（失敗分は警告として標準エラーに出る）。全件失敗した場合のみ終了コード1になる。
-    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/scan/")]
+    /// If a scan fails for some account/region pairs but another succeeds, cwsweep exits with code 0 and
+    /// prints warnings for the failures. It exits with code 1 only if every scan fails.
+    #[command(after_help = "Docs: https://cwsweep.hidetaka.dev/guides/scan/")]
     Scan(ScanArgs),
-    /// スキャンしたロググループを対話式に選び、削除またはretention変更を行う（--execute指定時のみ実行）。
+    /// Interactively select scanned log groups to delete or change retention (only with `--execute`).
     ///
-    /// 流れ:
-    ///   1. スキャン結果を一覧表示する（0件ならそこで終了する）。
-    ///   2. マルチセレクトで対象を選ぶ（初期状態は全てOFF）。
-    ///   3. アクション（delete または set-retention。set-retentionでは日数も入力）を選ぶ。
-    ///   4. 対象アカウントID・リージョン・ロググループ名・合計バイト数を再掲した確認画面で承認する（既定はNo）。
-    ///   5. --execute を指定した場合だけ実行する。未指定（dry-run）ではAWS APIを呼ばず、各対象を skipped と表示する。
+    /// Workflow:
+    ///   1. Display the scan results (exits if there are none).
+    ///   2. Select targets with a multi-select (all items are unchecked by default).
+    ///   3. Choose `delete` or `set-retention`; enter the number of days for the latter.
+    ///   4. Review and confirm the target account IDs, regions, log group names, and total bytes (defaults to No).
+    ///   5. Execute only when `--execute` is specified. Otherwise, no AWS API calls are made and each target is skipped.
     ///
-    /// 標準入力がTTYでない場合（パイプ・CI等）は、スキャン結果を表示して警告を出し、選択以降へ進まずに終了コード0で終了する（--execute を付けても何も実行されない）。非対話環境の棚卸しには `scan` を使う。
+    /// If stdin is not a TTY (for example, in a pipe or CI), cwsweep displays the scan results, prints a warning,
+    /// and exits with code 0 without proceeding to selection. Nothing is executed even if `--execute` is specified.
+    /// Use `scan` to inventory log groups in a non-interactive environment.
     ///
-    /// 実行時は、対象ごとにAPI呼び出しの直前へ sts:GetCallerIdentity によるアカウントID再検証を行い、不一致なら残りの計画全体を中断する。監査ログには、API呼び出しの前に実行意図（intent）、後に結果（result）を1行ずつ追記する。いずれかの書き込みに失敗した場合は処理を中断する。dry-runでは監査ログへ何も追記しない。
+    /// Before each API call, cwsweep verifies the account ID again with `sts:GetCallerIdentity`; a mismatch aborts
+    /// the remaining plan. The audit log records an `intent` line before each API call and a `result` line after it.
+    /// If either write fails, processing is aborted. Dry-runs do not write to the audit log.
     #[command(
         verbatim_doc_comment,
-        after_help = "詳細: https://cwsweep.hidetaka.dev/guides/clean/"
+        after_help = "Docs: https://cwsweep.hidetaka.dev/guides/clean/"
     )]
     Clean(CleanArgs),
-    /// 監査ログ（JSON Lines）を読み取り専用で表示する。
+    /// Display the JSON Lines audit log in read-only mode.
     ///
-    /// AWSには接続せず、監査ログを書き換えない。ファイルが存在しない場合は空の結果で正常終了する。解釈できない行は、行番号つきの警告を標準エラーに出してスキップし、残りの行は表示する。
+    /// Does not connect to AWS or modify the audit log. If the file does not exist, cwsweep exits successfully
+    /// with no entries. Malformed lines are skipped with a warning that includes the line number.
     ///
-    /// 削除・retention変更1件につき2行（event が intent の実行意図と、result の結果）が記録される。intent 行の success は結果が未確定のプレースホルダで、表では `-` と表示される。
-    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/audit/")]
+    /// Each delete or retention change is recorded as two lines: an `intent` event and a `result` event.
+    /// The `success` value in an `intent` event is a placeholder until the outcome is known; tables show it as `-`.
+    #[command(after_help = "Docs: https://cwsweep.hidetaka.dev/guides/audit/")]
     Audit(AuditArgs),
-    /// retention（保持期間）に関する操作。削除は一切行わない。
-    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/retention/")]
+    /// Manage retention periods; never deletes log groups.
+    #[command(after_help = "Docs: https://cwsweep.hidetaka.dev/guides/retention/")]
     Retention(RetentionArgs),
 }
 
@@ -110,115 +121,133 @@ pub struct RetentionArgs {
 /// `cwsweep retention <sub>`。将来 `get` / `clear` 等を追加する拡張点。
 #[derive(Subcommand, Debug, Clone)]
 pub enum RetentionCommands {
-    /// スキャンで見つかった全ロググループに一律のretention日数を設定する（--execute指定時のみ実行。削除は行わない）。
+    /// Set the same retention period on every log group found by the scan (only with `--execute`; never deletes).
     ///
-    /// `clean` と違って対話式の選択は行わず、スキャンで見つかった全ロググループが対象になる。--days が許容値でない場合は、AWSへ接続する前にエラーで終了する。
+    /// Unlike `clean`, there is no interactive selection; every log group found by the scan is targeted.
+    /// If `--days` is not an allowed value, cwsweep exits with an error before connecting to AWS.
     ///
-    /// 標準入力がTTYの場合は、対象一覧を再掲した確認画面で承認する（既定はNo）。TTYでない場合は確認なしの dry-run だけを実行でき、--execute を付けるとエラーで終了する。
+    /// On a TTY, review and confirm the target list before execution (defaults to No). On a non-TTY, only a
+    /// dry-run can be performed without confirmation; specifying `--execute` results in an error.
     ///
-    /// 実行時の再検証（sts:GetCallerIdentity）と監査ログへの追記（実行意図と結果の2行）は `clean` と同じ。dry-runでは監査ログへ何も追記しない。
-    #[command(after_help = "詳細: https://cwsweep.hidetaka.dev/guides/retention/")]
+    /// Account identity revalidation (`sts:GetCallerIdentity`) and audit logging (an intent and result line)
+    /// work the same as in `clean`. Dry-runs do not write to the audit log.
+    #[command(after_help = "Docs: https://cwsweep.hidetaka.dev/guides/retention/")]
     Set(SetRetentionArgs),
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct SetRetentionArgs {
-    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    /// Target regions. Use `all` for every enabled commercial region. Omit to choose interactively (TTY only).
     ///
-    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    /// Specify multiple regions as a comma-separated list or as space-separated/repeated values
+    /// (for example, `--regions us-east-1,ap-northeast-1`).
     ///
-    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    /// `all` is case-insensitive and takes precedence over other values. It calls `account:ListRegions` and
+    /// targets every enabled commercial-partition region (`ENABLED` / `ENABLED_BY_DEFAULT`). The count and
+    /// list are printed to stderr; on a TTY, cwsweep asks you to confirm (default: No).
     ///
-    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
+    /// If omitted, choose from the same list with a multi-select on a TTY (all items are unchecked by default;
+    /// selecting zero regions is an error). On a non-TTY, cwsweep exits with an error without connecting to AWS.
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    /// Role name to assume in member accounts (`arn:aws:iam::<account-id>:role/<role-name>`).
     ///
-    /// 管理アカウント自身には使わない。
+    /// Not used for the management account.
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
-    /// 設定するretention日数（必須）。CloudWatch Logsが許容する離散値のみ。
+    /// Retention period in days (required). Must be a value supported by CloudWatch Logs.
     ///
-    /// 許容値: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653。
+    /// Allowed values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557,
+    /// 2922, 3288, 3653.
     #[arg(long)]
     pub days: i32,
 
-    /// 指定した場合だけ put-retention-policy を実行する（未指定はdry-run）。
+    /// Call `put-retention-policy` only when this flag is specified (dry-run by default).
     ///
-    /// 標準入力がTTYでない場合は、このフラグを付けるとエラーで終了する。
+    /// If stdin is not a TTY, specifying this flag results in an error.
     #[arg(long, default_value_t = false)]
     pub execute: bool,
 
-    /// 監査ログ（JSON Lines）の追記先パス。無効化するオプションは存在しない。
+    /// Path to append the JSON Lines audit log to. There is no option to disable it.
     ///
-    /// ファイルが存在しなければ最初の書き込み時に作成し、存在すれば末尾へ追記する。親ディレクトリは存在している必要があり、無い場合や通常のファイルでない場合は起動時にエラーで終了する。
+    /// If the file does not exist, it is created on the first write; otherwise, entries are appended.
+    /// The parent directory must exist. A missing parent directory or a non-regular file causes a startup error.
     #[arg(long, default_value = "cwsweep-audit.jsonl")]
     pub audit_log_path: std::path::PathBuf,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct ScanArgs {
-    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    /// Target regions. Use `all` for every enabled commercial region. Omit to choose interactively (TTY only).
     ///
-    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    /// Specify multiple regions as a comma-separated list or as space-separated/repeated values
+    /// (for example, `--regions us-east-1,ap-northeast-1`).
     ///
-    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    /// `all` is case-insensitive and takes precedence over other values. It calls `account:ListRegions` and
+    /// targets every enabled commercial-partition region (`ENABLED` / `ENABLED_BY_DEFAULT`). The count and
+    /// list are printed to stderr; on a TTY, cwsweep asks you to confirm (default: No).
     ///
-    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
+    /// If omitted, choose from the same list with a multi-select on a TTY (all items are unchecked by default;
+    /// selecting zero regions is an error). On a non-TTY, cwsweep exits with an error without connecting to AWS.
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    /// Role name to assume in member accounts (`arn:aws:iam::<account-id>:role/<role-name>`).
     ///
-    /// 管理アカウント自身には使わない。
+    /// Not used for the management account.
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
-    /// 出力フォーマット（table | json）。
+    /// Output format (`table` or `json`).
     #[arg(long, value_enum, default_value = "table")]
     pub output: OutputFormat,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct CleanArgs {
-    /// 対象リージョン。`all` で有効化済みの商用全リージョン。未指定は対話式に選択する（TTYのみ）。
+    /// Target regions. Use `all` for every enabled commercial region. Omit to choose interactively (TTY only).
     ///
-    /// カンマ区切り、または空白区切り・複数回指定で複数指定できる（例: --regions us-east-1,ap-northeast-1）。
+    /// Specify multiple regions as a comma-separated list or as space-separated/repeated values
+    /// (for example, `--regions us-east-1,ap-northeast-1`).
     ///
-    /// `all`（大文字小文字は区別しない。他の値と併用しても `all` が優先される）は、account:ListRegions で有効化済み（ENABLED / ENABLED_BY_DEFAULT）の商用パーティションのリージョンを全て対象にする。件数と一覧を標準エラーに表示し、TTYでは続行の確認を求める（既定はNo）。
+    /// `all` is case-insensitive and takes precedence over other values. It calls `account:ListRegions` and
+    /// targets every enabled commercial-partition region (`ENABLED` / `ENABLED_BY_DEFAULT`). The count and
+    /// list are printed to stderr; on a TTY, cwsweep asks you to confirm (default: No).
     ///
-    /// 未指定の場合、TTYでは同じ一覧からマルチセレクトで選ぶ（初期状態は全てOFF。0件選択はエラー）。TTYでない場合はAWSへ接続せずエラーで終了する。
+    /// If omitted, choose from the same list with a multi-select on a TTY (all items are unchecked by default;
+    /// selecting zero regions is an error). On a non-TTY, cwsweep exits with an error without connecting to AWS.
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub regions: Vec<String>,
 
-    /// メンバーアカウントへAssumeRoleする際のロール名（arn:aws:iam::<アカウントID>:role/<ロール名>）。
+    /// Role name to assume in member accounts (`arn:aws:iam::<account-id>:role/<role-name>`).
     ///
-    /// 管理アカウント自身には使わない。
+    /// Not used for the management account.
     #[arg(long, default_value = "OrganizationAccountAccessRole")]
     pub role_name: String,
 
-    /// 指定した場合だけ delete-log-group / put-retention-policy を実行する（未指定はdry-run）。
+    /// Call `delete-log-group` / `put-retention-policy` only when specified (dry-run by default).
     ///
-    /// 標準入力がTTYでない場合は、このフラグを付けても選択以降へ進まないため何も実行されない。
+    /// If stdin is not a TTY, selection cannot proceed and no changes are made even if this flag is specified.
     #[arg(long, default_value_t = false)]
     pub execute: bool,
 
-    /// 監査ログ（JSON Lines）の追記先パス。無効化するオプションは存在しない。
+    /// Path to append the JSON Lines audit log to. There is no option to disable it.
     ///
-    /// ファイルが存在しなければ最初の書き込み時に作成し、存在すれば末尾へ追記する。親ディレクトリは存在している必要があり、無い場合や通常のファイルでない場合は起動時にエラーで終了する。
+    /// If the file does not exist, it is created on the first write; otherwise, entries are appended.
+    /// The parent directory must exist. A missing parent directory or a non-regular file causes a startup error.
     #[arg(long, default_value = "cwsweep-audit.jsonl")]
     pub audit_log_path: std::path::PathBuf,
 }
 
 #[derive(Args, Debug, Clone)]
 pub struct AuditArgs {
-    /// 読み取る監査ログ（JSON Lines）のパス。
+    /// Path to the JSON Lines audit log to read.
     #[arg(long, default_value = "cwsweep-audit.jsonl")]
     pub audit_log_path: std::path::PathBuf,
 
-    /// 出力フォーマット（table | json）。
+    /// Output format (`table` or `json`).
     #[arg(long, value_enum, default_value = "table")]
     pub output: OutputFormat,
 }
@@ -394,7 +423,7 @@ impl ScanApp {
             return ExitDisposition::Error("failed to write output".to_string());
         }
         if aggregator.is_empty() && output == OutputFormat::Table {
-            let _ = writeln!(out, "ロググループは見つかりませんでした。");
+            let _ = writeln!(out, "No log groups found.");
         }
         ExitDisposition::Success
     }
@@ -444,7 +473,7 @@ pub fn run_audit(
 ) -> ExitDisposition {
     let outcome = match reader.entries() {
         Ok(outcome) => outcome,
-        Err(e) => return ExitDisposition::Error(format!("監査ログの読み取りに失敗しました: {e}")),
+        Err(e) => return ExitDisposition::Error(format!("Failed to read the audit log: {e}")),
     };
     match writeln!(
         out,
@@ -494,7 +523,7 @@ impl CliApp {
             CliApp::render_output(&aggregator, OutputFormat::Table)
         );
         if aggregator.is_empty() {
-            let _ = writeln!(out, "削除対象のロググループはありません。");
+            let _ = writeln!(out, "No log groups to delete.");
             return ExitDisposition::Success;
         }
         if !stdin_is_tty {
@@ -509,7 +538,7 @@ impl CliApp {
             Err(e) => return ExitDisposition::Error(e.to_string()),
         };
         if selected.is_empty() {
-            let _ = writeln!(out, "選択されたロググループはありません。終了します。");
+            let _ = writeln!(out, "No log groups selected. Exiting.");
             return ExitDisposition::Success;
         }
 
@@ -525,7 +554,7 @@ impl CliApp {
 
         let Some(confirmed_actions) = CliApp::confirm(interaction.presenter, &planned, total_bytes)
         else {
-            let _ = writeln!(out, "確認が得られなかったため、処理を中止します。");
+            let _ = writeln!(out, "Confirmation declined; aborting.");
             return ExitDisposition::Success;
         };
 
@@ -577,7 +606,7 @@ impl CliApp {
             CliApp::render_output(&aggregator, OutputFormat::Table)
         );
         if aggregator.is_empty() {
-            let _ = writeln!(out, "retention設定対象のロググループはありません。");
+            let _ = writeln!(out, "No log groups to update retention for.");
             return ExitDisposition::Success;
         }
 
@@ -596,7 +625,7 @@ impl CliApp {
             match CliApp::confirm(presenter, &planned, total_bytes) {
                 Some(actions) => actions,
                 None => {
-                    let _ = writeln!(out, "確認が得られなかったため、処理を中止します。");
+                    let _ = writeln!(out, "Confirmation declined; aborting.");
                     return ExitDisposition::Success;
                 }
             }
@@ -1590,7 +1619,7 @@ mod tests {
         assert_eq!(disposition, ExitDisposition::Success);
         assert!(String::from_utf8(out)
             .unwrap()
-            .contains("ロググループは見つかりませんでした"));
+            .contains("No log groups found."));
     }
 
     fn recording_api() -> Arc<RecordingApi> {
@@ -1732,7 +1761,9 @@ mod tests {
 
         assert_eq!(disposition, ExitDisposition::Success);
         assert_eq!(deletes(&api), 0);
-        assert!(String::from_utf8(out).unwrap().contains("処理を中止します"));
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("Confirmation declined; aborting."));
     }
 
     // --- retention set ---
@@ -1939,7 +1970,9 @@ mod tests {
 
         assert_eq!(disposition, ExitDisposition::Success);
         assert_eq!(retentions(&api), 0);
-        assert!(String::from_utf8(out).unwrap().contains("処理を中止します"));
+        assert!(String::from_utf8(out)
+            .unwrap()
+            .contains("Confirmation declined; aborting."));
     }
 
     #[tokio::test]
@@ -2102,6 +2135,32 @@ mod tests {
         &["retention", "set"],
     ];
 
+    fn contains_japanese_character(text: &str) -> bool {
+        text.chars().any(|ch| {
+            matches!(
+                ch,
+                '\u{3040}'..='\u{30ff}'
+                    | '\u{31f0}'..='\u{31ff}'
+                    | '\u{3400}'..='\u{4dbf}'
+                    | '\u{4e00}'..='\u{9fff}'
+                    | '\u{f900}'..='\u{faff}'
+            )
+        })
+    }
+
+    #[test]
+    fn every_help_contains_no_japanese_characters() {
+        for path in HELP_PATHS {
+            for long in [false, true] {
+                let help = render_help(path, long);
+                assert!(
+                    !contains_japanese_character(&help),
+                    "help for {path:?} (long={long}) contains Japanese characters:\n{help}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn every_help_ends_with_the_docs_site_url() {
         for path in HELP_PATHS {
@@ -2109,7 +2168,7 @@ mod tests {
                 let help = render_help(path, long);
                 let last = help.trim_end().lines().last().unwrap_or_default();
                 assert!(
-                    last.starts_with("詳細: https://cwsweep.hidetaka.dev/"),
+                    last.starts_with("Docs: https://cwsweep.hidetaka.dev/"),
                     "help for {path:?} (long={long}) must end with the docs URL, got: {last}"
                 );
             }
@@ -2125,7 +2184,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join(", ");
         assert!(
-            help.contains(&format!("許容値: {listed}。")),
+            help.contains(&format!("Allowed values: {listed}.")),
             "--days help must list ALLOWED_RETENTION_DAYS exactly"
         );
     }

@@ -375,7 +375,7 @@ impl MultiSelectPrompt for InquireMultiSelectPrompt {
         // `raw_prompt()`は選択された項目それぞれの元のインデックス(`ListOption::index`)を
         // 返すため、ラベルの重複に関わらず選択されたインデックスのみを正しく復元できる。
         let selected =
-            inquire::MultiSelect::new("削除・retention変更の対象を選択してください:", options)
+            inquire::MultiSelect::new("Select log groups to delete or change retention:", options)
                 .with_default(default_selected_indices)
                 .raw_prompt()
                 .map_err(|e| SelectorError(e.to_string()))?;
@@ -389,7 +389,7 @@ struct InquireRegionPrompt;
 impl RegionPrompt for InquireRegionPrompt {
     fn confirm_all(&self, regions: &[String]) -> bool {
         inquire::Confirm::new(&format!(
-            "商用リージョン {} 件をすべて対象にします。続行しますか？",
+            "Target all {} commercial regions. Continue?",
             regions.len()
         ))
         .with_default(false)
@@ -400,7 +400,7 @@ impl RegionPrompt for InquireRegionPrompt {
     fn select(&self, regions: &[String]) -> Result<Vec<String>, String> {
         // 初期状態は全チェックOFF（ロググループ選択と同じ安全不変条件）。
         inquire::MultiSelect::new(
-            "--regions が未指定です。スキャン対象のリージョンを選択してください:",
+            "--regions was not specified. Select the regions to scan:",
             regions.to_vec(),
         )
         .prompt()
@@ -415,37 +415,37 @@ struct InquireConfirmPrompt {
 
 fn execution_mode_label(execute: bool) -> &'static str {
     if execute {
-        "EXECUTE（実際にAWS APIを呼び出します）"
+        "EXECUTE (AWS API calls will be made)"
     } else {
-        "DRY-RUN（--execute未指定のため、AWS APIは呼び出しません）"
+        "DRY-RUN (--execute not specified; no AWS API calls will be made)"
     }
 }
 
 fn confirm_question(execute: bool) -> &'static str {
     if execute {
-        "上記の内容で実行してよろしいですか？"
+        "Proceed with the actions above?"
     } else {
-        "上記の内容でdry-runを続行しますか？（実際の変更は行われません）"
+        "Continue with the dry run? (No changes will be made)"
     }
 }
 
 impl ConfirmPrompt for InquireConfirmPrompt {
     fn confirm(&self, summary: &ConfirmationSummary) -> bool {
-        println!("実行モード: {}", execution_mode_label(self.execute));
-        println!("対象アカウントID: {:?}", summary.account_ids);
-        println!("対象リージョン: {:?}", summary.regions);
-        println!("対象ログループ: {:?}", summary.log_group_names);
-        println!("合計バイト数: {}", summary.total_bytes);
+        println!("Execution mode: {}", execution_mode_label(self.execute));
+        println!("Target account IDs: {:?}", summary.account_ids);
+        println!("Target regions: {:?}", summary.regions);
+        println!("Target log groups: {:?}", summary.log_group_names);
+        println!("Total bytes: {}", summary.total_bytes);
         // CodeRabbit指摘#3: アカウント/リージョン/ログループ名の独立配列だけでは、
         // 異なるアカウント/リージョンに同名のロググループがある場合に対応関係が
         // 失われる。`targets`は1件ごとの対応関係（＋アクション種別）を保持しており、
         // ここで対象一覧として1行ずつ再掲する。
-        println!("--- 実行対象一覧（対応関係付き） ---");
+        println!("--- Planned actions by account, region, and log group ---");
         for target in &summary.targets {
             let action_label = match target.action_kind {
                 cwsweep::planner::ActionKind::Delete => "delete".to_string(),
                 cwsweep::planner::ActionKind::SetRetention { days } => {
-                    format!("set-retention({days}日)")
+                    format!("set-retention({days} days)")
                 }
             };
             println!(
@@ -474,13 +474,13 @@ fn single_account_fallback(management_account_id: &str) -> Vec<AccountInfo> {
 
 fn action_kind_from_prompt() -> Result<ActionKind, String> {
     let options = vec!["delete", "set-retention"];
-    let choice = inquire::Select::new("実行するアクションを選択してください:", options)
+    let choice = inquire::Select::new("Choose an action:", options)
         .prompt()
         .map_err(|e| e.to_string())?;
     match choice {
         "delete" => Ok(ActionKind::Delete),
         _ => {
-            let days = inquire::CustomType::<i32>::new("retention日数を入力してください:")
+            let days = inquire::CustomType::<i32>::new("Retention period in days:")
                 .prompt()
                 .map_err(|e| e.to_string())?;
             Ok(ActionKind::SetRetention { days })
@@ -581,7 +581,7 @@ async fn wire_aws(
         Ok(accounts) => accounts,
         Err(err) if err.not_in_organization => {
             eprintln!(
-                "このアカウント（{management_account_id}）はAWS Organizationのメンバーではないため、単一アカウントモードで実行します。"
+                "The caller account ({management_account_id}) is not a member of an AWS Organization; continuing in single-account mode."
             );
             single_account_fallback(&management_account_id)
         }
@@ -600,7 +600,7 @@ fn exit_with(disposition: ExitDisposition) -> Result<(), Box<dyn std::error::Err
     match disposition {
         ExitDisposition::Success => Ok(()),
         ExitDisposition::ScanFullyFailed { attempted } => Err(format!(
-            "全{attempted}件のアカウント×リージョンの組み合わせでスキャンに失敗しました。詳細は上記の警告ログを確認してください。"
+            "All {attempted} account/region scans failed. See the warnings above for details."
         )
         .into()),
         ExitDisposition::Error(message) => Err(message.into()),
@@ -774,7 +774,7 @@ mod tests {
     fn confirmation_texts_distinguish_dry_run_from_execute() {
         assert!(execution_mode_label(false).contains("DRY-RUN"));
         assert!(execution_mode_label(true).contains("EXECUTE"));
-        assert!(confirm_question(false).contains("dry-run"));
+        assert!(confirm_question(false).contains("dry run"));
         assert!(!confirm_question(true).contains("dry-run"));
     }
 

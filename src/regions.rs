@@ -65,18 +65,18 @@ pub trait RegionPrompt {
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum RegionResolveError {
     #[error(
-        "--regions が指定されていません。CI/パイプ等の非対話環境では `--regions <region>[,<region>...]` または `--regions all` を明示してください。"
+        "--regions was not specified. In non-interactive environments such as CI or pipes, specify --regions <region>[,<region>...] or --regions all."
     )]
     MissingInNonInteractive,
-    #[error("account:ListRegions で列挙されたリージョンが0件でした")]
+    #[error("account:ListRegions returned no regions")]
     NoRegionsListed,
-    #[error("リージョンが1件も選択されなかったため、処理を中止します")]
+    #[error("No regions selected; aborting")]
     NothingSelected,
-    #[error("全リージョンを対象とする実行が確認されなかったため、処理を中止します")]
+    #[error("Confirmation to target all regions was not given; aborting")]
     AllNotConfirmed,
     #[error(transparent)]
     List(#[from] ListRegionsError),
-    #[error("リージョン選択に失敗しました: {0}")]
+    #[error("Region selection failed: {0}")]
     Prompt(String),
 }
 
@@ -95,7 +95,7 @@ pub async fn resolve_regions(
         RegionSpec::All => {
             let regions = listed_regions(lister).await?;
             eprintln!(
-                "--regions all が指定されたため、商用リージョン {} 件を対象にします: {}",
+                "--regions all was specified; targeting {} commercial regions: {}",
                 regions.len(),
                 regions.join(", ")
             );
