@@ -102,8 +102,14 @@ Commit the `aidlc/` workspace tree — the record (state, the per-clone audit sh
 - **docs サイトは SKILL.md をコピーしない。** `/skill.md` と `/.well-known/agent-skills/` は
   `website/src/lib/skills.ts` が `skills/` をビルド時に読んで配信する。`skills/**` の変更でも
   サイトが再デプロイされるよう、`.github/workflows/deploy-website.yml` の `paths` に含めている。
-- **リリース:** `main` への push で `Cargo.toml` の `version` が未リリースならリリースされる
-  （README「リリース」参照）。バージョンは手編集せず `cargo set-version` で上げる。
-  コミットメッセージの書式を定めた文書はリポジトリにない（履歴は日本語の自由形式）。
+- **リリース:** `main` への push で、semantic-release がコミットメッセージから次バージョンを
+  決めてリリースする（README「リリース」参照）。`Cargo.toml` の `version` は手で上げない。
+- **コミットメッセージ:** すべてのコミットを [Conventional Commits](https://www.conventionalcommits.org/ja/v1.0.0/)
+  で書く（`型: 件名`、件名は日本語でよい）。型がそのままリリースのバージョンを決める:
+  `feat:` → minor、`fix:` / `perf:` → patch、`feat!:` など `!` 付き・本文の `BREAKING CHANGE:` → major、
+  `docs:` / `chore:` / `ci:` / `test:` / `refactor:` / `style:` / `build:` → リリースしない。
+  利用者に見える変更（CLI の挙動・出力・フラグ）は `feat:` か `fix:` にする（`chore:` 等にすると
+  リリースされない）。PR 上の CI の `commitlint` ジョブがブランチ上の全コミットを検証する。
+  失敗したら `git rebase -i` 等でメッセージを直して force push する。
 - 変更前の確認: `cargo fmt --check` / `cargo clippy --all-targets --locked -- -D warnings` /
   `cargo test --locked` / `(cd website && npm ci && npm run build)`。

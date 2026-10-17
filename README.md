@@ -223,35 +223,35 @@ cargo llvm-cov --lib --summary-only
 
 ## リリース
 
-`main` へのマージ（push）がリリースのトリガーになる。`Cargo.toml` の `version` がまだ
-リリースされていなければ、クロスプラットフォーム（Linux/macOS、x86_64/arm64）の
-リリースバイナリをビルドし、`vX.Y.Z` タグ付きの GitHub Release を作成して添付する。
-タグはパイプラインが `gh release create --target <マージコミット>` で自動作成するため、
-**手動でタグを打って push してはいけない**（リリースパイプラインは「`vX.Y.Z` タグが
-既に存在する＝公開済み」と判定してビルドをスキップするため、手動タグを先に push すると
-そのバージョンのリリースが作られなくなる）。`version` が変わらない `main` への push では、
-既存タグを検知して何もせずに終了する。
+`main` へのマージ（push）がリリースのトリガーになる。[semantic-release](https://semantic-release.gitbook.io/)
+が前回のリリースタグ以降のコミットメッセージ（[Conventional Commits](https://www.conventionalcommits.org/ja/v1.0.0/)）
+から次のバージョンを決め、クロスプラットフォーム（Linux/macOS、x86_64/arm64）のリリースバイナリを
+ビルドし、`vX.Y.Z` タグ付きの GitHub Release を作成して添付する。**バージョンを手で上げる必要はない。**
+
+| コミットの型 | バージョン |
+| ------------ | ---------- |
+| `feat:` | minor（例: 0.2.1 → 0.3.0） |
+| `fix:` / `perf:` | patch（例: 0.2.1 → 0.2.2） |
+| `feat!:` など `!` 付き、または本文に `BREAKING CHANGE:` | major |
+| `docs:` / `chore:` / `ci:` / `test:` / `refactor:` など | リリースしない |
+
+- PR は merge commit でマージする。`Merge pull request #...` は無視され、PR 内の**各コミット**の
+  メッセージで判定される。そのため、PR 上の CI（`commitlint` ジョブ）がブランチ上の全コミットを
+  検証し、Conventional Commits でないコミットがあれば失敗する。
+- タグはパイプラインが自動作成するため、**手動でタグを打って push してはいけない**。
+- リポジトリ内の `Cargo.toml` / `Cargo.lock` の `version` はリリースしても更新されない
+  （バージョンの正はタグ）。配布するバイナリは、ビルド時に CI がリリース版の version を
+  書き込むので、`cwsweep --version` はリリース版を表示する。
+- リリースノートは GitHub Release に自動生成される。`CHANGELOG.md` は自動更新されない。
 
 このビルド・添付処理は、このリポジトリの `.circleci/config.yml` には**含まれていない**。
 [hideokamoto/circleci-configurations](https://github.com/hideokamoto/circleci-configurations)
 の [`workflows/release/rust-github-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-release.yaml)
 を、CircleCI の [Config Sources 機能（複数パイプライン設定）](https://circleci.com/docs/guides/orchestrate/set-up-multiple-configuration-files-for-a-project/)
 で紐づけた、`Pushes to default branch` 起点の**別のパイプライン定義**として実行する
-（通常の fmt/clippy/test/coverage/audit/deny は、このリポジトリの `.circleci/config.yml`
-のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`、`circleci`）は
+（通常の commitlint/fmt/clippy/test/coverage/deny は、このリポジトリの `.circleci/config.yml`
+のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`）は
 そちらのリポジトリの `workflows/release/README.md` を参照。
-
-```bash
-# フィーチャーブランチでバージョンを上げる。Cargo.toml を手編集すると Cargo.lock の
-# 同期を忘れやすい（リリースビルドは --locked のため、同期漏れがあると全ターゲット
-# のビルドが失敗する。v0.2.1 で実際に事故った）。`cargo set-version` (cargo-edit) が
-# Cargo.toml と Cargo.lock を一括で更新するので、手編集ではなくこちらを使う。
-cargo install cargo-edit --locked   # 未導入の場合のみ
-cargo set-version 0.2.2
-cargo metadata --locked --format-version 1 > /dev/null  # 同期確認（失敗しなければOK）
-
-# CHANGELOG.md を更新してコミットし、PR 経由で main へマージする（これがリリースのトリガー）
-```
 
 ## AI-DLC Workflows v2
 
