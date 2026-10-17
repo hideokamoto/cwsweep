@@ -1,0 +1,50 @@
+---
+// GitHub Releases の一覧（新しい順）。データは content.config.ts の releases コレクション。
+import { getCollection, render } from 'astro:content';
+
+interface Props {
+	lang: 'en' | 'ja';
+}
+
+const { lang } = Astro.props;
+const t = {
+	en: { published: 'Published', downloads: 'Downloads', prerelease: 'Pre-release', none: 'No releases yet.' },
+	ja: { published: '公開日', downloads: 'ダウンロード', prerelease: 'プレリリース', none: 'リリースはまだありません。' },
+}[lang];
+
+const releases = (await getCollection('releases')).sort((a, b) =>
+	b.data.publishedAt.localeCompare(a.data.publishedAt),
+);
+const entries = await Promise.all(releases.map(async (r) => ({ release: r.data, Content: (await render(r)).Content })));
+
+const formatDate = (iso: string) => iso.slice(0, 10);
+const formatSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+---
+
+{entries.length === 0 && <p>{t.none}</p>}
+{
+	entries.map(({ release, Content }) => (
+		<section>
+			<h2 id={release.tag}>
+				<a href={release.url}>{release.name}</a>
+				{release.prerelease && <small> ({t.prerelease})</small>}
+			</h2>
+			<p>
+				{t.published}: <time datetime={release.publishedAt}>{formatDate(release.publishedAt)}</time>
+			</p>
+			<Content />
+			{release.assets.length > 0 && (
+				<details>
+					<summary>{t.downloads}</summary>
+					<ul>
+						{release.assets.map((asset) => (
+							<li>
+								<a href={asset.url}>{asset.name}</a> ({formatSize(asset.size)})
+							</li>
+						))}
+					</ul>
+				</details>
+			)}
+		</section>
+	))
+}
