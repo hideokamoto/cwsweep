@@ -246,22 +246,12 @@ cargo llvm-cov --lib --summary-only
 
 このビルド・添付処理は、このリポジトリの `.circleci/config.yml` には**含まれていない**。
 [hideokamoto/circleci-configurations](https://github.com/hideokamoto/circleci-configurations)
-の [`workflows/release/rust-github-semantic-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-semantic-release.yaml)
+の [`workflows/release/rust-github-release.yaml`](https://github.com/hideokamoto/circleci-configurations/blob/main/workflows/release/rust-github-release.yaml)
 を、CircleCI の [Config Sources 機能（複数パイプライン設定）](https://circleci.com/docs/guides/orchestrate/set-up-multiple-configuration-files-for-a-project/)
 で紐づけた、`Pushes to default branch` 起点の**別のパイプライン定義**として実行する
 （通常の commitlint/fmt/clippy/test/coverage/deny は、このリポジトリの `.circleci/config.yml`
 のまま push/PR 起点で実行され続ける）。設定手順・必要な Context（`github`）は
 そちらのリポジトリの `workflows/release/README.md` を参照。
-
-**この方式への切り替え手順**（旧方式 `rust-github-release.yaml`、`Cargo.toml` の version を手で上げる方式からの移行）:
-
-1. circleci-configurations 側の `rust-github-semantic-release.yaml` を main にマージする
-   （ファイルが無い状態で切り替えると、リリース用パイプラインの設定取得が失敗する）。
-2. CircleCI の Project Settings で、リリース用パイプライン定義の **Config File Path** を
-   `workflows/release/rust-github-release.yaml` から `workflows/release/rust-github-semantic-release.yaml`
-   に変える（Config Source・Checkout Source・トリガーはそのまま）。
-3. 切り替えるまでは旧方式が動き続ける。旧方式は `Cargo.toml` の version が未リリースのときだけ
-   リリースするため、コミットメッセージを `feat:` / `fix:` にしても、切り替え前はリリースされない。
 
 ## AI-DLC Workflows v2
 

@@ -202,7 +202,7 @@ workflows:
 # リリース（main への push で、semantic-release が Conventional Commits から次バージョンを決め、
 # クロスプラットフォームのリリースバイナリをビルドし、vX.Y.Z タグ付きの GitHub Release を作成して
 # 添付する）は、このリポジトリのパイプライン定義には含まれていない。
-# hideokamoto/circleci-configurations の workflows/release/rust-github-semantic-release.yaml を
+# hideokamoto/circleci-configurations の workflows/release/rust-github-release.yaml を
 # CircleCI の Config Sources 機能（複数パイプライン設定）で紐づけた、別のパイプライン定義
 # （Pushes to default branch 起点）として実行する。タグはそのパイプラインが自動作成するため
 # 手動で push しない。詳細は README.md の「リリース」節を参照。
