@@ -240,12 +240,12 @@ fn rust_version_requirement_is_the_same_in_cargo_toml_skill_and_docs() {
         "README.md"
     );
     assert!(
-        repo_file("website/src/content/docs/getting-started.md")
+        repo_file("website/src/content/docs/getting-started.mdx")
             .contains(&format!("Rust {v} or later")),
         "website getting-started (en)"
     );
     assert!(
-        repo_file("website/src/content/docs/ja/getting-started.md")
+        repo_file("website/src/content/docs/ja/getting-started.mdx")
             .contains(&format!("Rust {v} 以上")),
         "website getting-started (ja)"
     );

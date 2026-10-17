@@ -16,6 +16,7 @@ export default defineConfig({
 				root: { label: 'English', lang: 'en' },
 				ja: { label: '日本語', lang: 'ja' },
 			},
+			routeMiddleware: './src/routeData.ts',
 			// llms.txt v2: 全ページから /llms.txt を rel="describedby" で示す。
 			// https://llmstxt.org/changes.html
 			head: [
