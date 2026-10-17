@@ -14,6 +14,11 @@ on:
       # skills/ だけを変えたときもサイトを再デプロイする。
       - "skills/**"
       - ".github/workflows/deploy-website.yml"
+  # リリース履歴ページ（reference/releases）は GitHub Releases をビルド時に取得する。
+  # リリースが公開されたら再デプロイして反映する。リリースは CircleCI 側のトークンで作られるため、
+  # 「Actions の GITHUB_TOKEN が起こしたイベントではワークフローが動かない」制限には当たらない。
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -31,8 +36,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # release イベントでは github.ref がリリースタグになる。タグ作成後に main の文書が
+          # 更新されていると古い文書で上書きしてしまうため、リリース時は main からビルドする。
+          ref: ${{ github.event_name == 'release' && 'main' || github.ref }}
       - name: Install, build, and upload site
         uses: withastro/action@v6
+        env:
+          # Releases API を認証付きで呼ぶ（未認証の 60 リクエスト/時制限を避ける）。読み取りのみ。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path: ./website
 
