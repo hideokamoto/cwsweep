@@ -1,0 +1,29 @@
+---
+// Starlight 既定のフッターに、プライバシーポリシー（外部送信の公表ページ）へのリンクを足す。
+// 外部送信規律の FAQ 問3-11 に合わせ、リンク先に何が書いてあるかがリンク名から分かるようにする。
+import Default from '@astrojs/starlight/components/Footer.astro';
+
+const isJa = Astro.locals.starlightRoute.locale === 'ja';
+const privacy = isJa
+	? { href: '/ja/privacy/', label: 'プライバシーポリシー（外部送信について）' }
+	: { href: '/privacy/', label: 'Privacy Policy' };
+---
+
+<Default />
+<p class="privacy">
+	<a href={privacy.href} data-privacy-link>{privacy.label}</a>
+</p>
+
+<style>
+	.privacy {
+		margin-top: 1.5rem;
+		font-size: var(--sl-text-xs);
+		text-align: center;
+	}
+	.privacy a {
+		color: var(--sl-color-gray-3);
+	}
+	.privacy a:hover {
+		color: var(--sl-color-white);
+	}
+</style>

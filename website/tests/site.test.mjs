@@ -131,3 +131,59 @@ for (const page of pages) {
 		});
 	}
 }
+
+const GA_MEASUREMENT_ID = 'G-T6E24WDMJK';
+
+function inlineScripts(html) {
+	return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].map(([, attrs, body]) => ({
+		attrs: parseAttributes(`<script ${attrs}>`),
+		body,
+	}));
+}
+
+for (const page of pages) {
+	test(`${page.name} loads Google Analytics only on the production host`, async () => {
+		const html = await readPage(page.path);
+		const analytics = inlineScripts(html).filter(({ body }) => body.includes(GA_MEASUREMENT_ID));
+
+		assert.equal(analytics.length, 1, `${page.name} must have exactly one analytics script`);
+		assert.match(analytics[0].body, /location\.hostname === 'cwsweep\.hidetaka\.dev'/);
+		// gtag.js は本番ホストの判定を通ったあとに動的に読み込む。静的な <script src> では
+		// localhost でも送信されてしまうため、置かれていないことを確かめる。
+		assert.doesNotMatch(html, /<script\b[^>]*src="https:\/\/www\.googletagmanager\.com\//);
+	});
+
+	test(`${page.name} links to the privacy policy in its own locale`, async () => {
+		const html = await readPage(page.path);
+		const href = page.locale === 'ja' ? '/ja/privacy/' : '/privacy/';
+		const links = [...html.matchAll(/<a\b[^>]*data-privacy-link[^>]*>/gi)].map(([tag]) => parseAttributes(tag));
+
+		assert.equal(links.length, 1, `${page.name} must have one privacy link`);
+		assert.equal(links[0].href, href);
+		await access(path.join(distDir, href.slice(1), 'index.html'));
+	});
+}
+
+test('Japanese privacy policy discloses the recipient, purpose, and opt-out', async () => {
+	const html = await readPage('ja/privacy/index.html');
+
+	assert.match(html, /Google LLC/);
+	assert.match(html, /https:\/\/business\.safety\.google\/intl\/ja\/tba-jp\//);
+	assert.match(html, /https:\/\/policies\.google\.com\/technologies\/partner-sites/);
+	assert.match(html, /https:\/\/tools\.google\.com\/dlpage\/gaoptout/);
+});
+
+test('robots.txt points to the generated sitemap', async () => {
+	const robots = await readFile(path.join(distDir, 'robots.txt'), 'utf8');
+	const sitemap = robots.match(/^Sitemap: https:\/\/cwsweep\.hidetaka\.dev\/(\S+)$/m);
+
+	assert.ok(sitemap, 'robots.txt must declare the sitemap');
+	await access(path.join(distDir, sitemap[1]));
+});
+
+test('the abridged llms-small.txt leaves out the privacy policy', async () => {
+	for (const file of ['llms.txt', 'llms-small.txt']) {
+		const text = await readFile(path.join(distDir, file), 'utf8');
+		assert.doesNotMatch(text, /privacy/i, `${file} must not include the privacy policy`);
+	}
+});
