@@ -17,7 +17,7 @@ When you open a page, the Google Analytics program sends the following to Google
 - An approximate location estimated from your IP address
 - An identifier used to count your visits to this site together (stored in a browser cookie)
 
-Nothing that directly identifies you, such as your name or email address, is sent.
+This site has no way to enter or collect information that directly identifies you, such as your name or email address.
 
 ## Recipient
 
