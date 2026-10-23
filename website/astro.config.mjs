@@ -6,13 +6,26 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 // Google アナリティクス（GA4）。本番ドメインで開いたときだけ gtag.js を読み込み、
 // `astro dev` や `astro preview`（localhost）からは送信しない。
 // 送信内容と停止方法は src/content/docs/privacy.md と ja/privacy.md で公表している。
+// URL のクエリや参照元に個人を特定する値が入っていても送らないよう、送信する URL を明示する。
+// ページの URL は流入元の計測に使う utm_* だけを残し、参照元は同じサイト内ならパスまで、
+// 外部サイトならオリジンまでにする。
 const GA_MEASUREMENT_ID = 'G-T6E24WDMJK';
 const PRODUCTION_HOST = 'cwsweep.hidetaka.dev';
 const analyticsScript = `if (location.hostname === '${PRODUCTION_HOST}') {
 	window.dataLayer = window.dataLayer || [];
 	window.gtag = function () { window.dataLayer.push(arguments); };
 	window.gtag('js', new Date());
-	window.gtag('config', '${GA_MEASUREMENT_ID}');
+	const here = new URL(location.href);
+	const pageLocation = new URL(here.origin + here.pathname);
+	for (const [key, value] of here.searchParams) {
+		if (key.startsWith('utm_')) pageLocation.searchParams.append(key, value);
+	}
+	const config = { page_location: pageLocation.href };
+	if (document.referrer) {
+		const referrer = new URL(document.referrer);
+		config.page_referrer = referrer.origin === here.origin ? referrer.origin + referrer.pathname : referrer.origin + '/';
+	}
+	window.gtag('config', '${GA_MEASUREMENT_ID}', config);
 	const script = document.createElement('script');
 	script.async = true;
 	script.src = 'https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}';

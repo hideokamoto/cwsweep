@@ -3,6 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist');
 
@@ -163,6 +164,58 @@ for (const page of pages) {
 		await access(path.join(distDir, href.slice(1), 'index.html'));
 	});
 }
+
+// 本番ホストでの実行結果を、ビルド済みのスクリプトをそのまま動かして確かめる
+async function runAnalytics(href, referrer) {
+	const html = await readPage('guides/scan/index.html');
+	const [{ body }] = inlineScripts(html).filter((script) => script.body.includes(GA_MEASUREMENT_ID));
+	const appended = [];
+	const window = {};
+	const context = {
+		window,
+		location: new URL(href),
+		document: {
+			referrer,
+			createElement: () => ({}),
+			head: { appendChild: (element) => appended.push(element) },
+		},
+		URL,
+		Date,
+	};
+	vm.runInNewContext(body, context);
+	const config = (window.dataLayer ?? []).map((args) => Array.from(args)).find(([command]) => command === 'config');
+	return { config, appended };
+}
+
+test('analytics strips identifying query values and limits the referrer', async () => {
+	const { config, appended } = await runAnalytics(
+		'https://cwsweep.hidetaka.dev/guides/scan/?name=Hanako%20Yamada&utm_source=newsletter#top',
+		'https://example.com/private?token=abc',
+	);
+
+	assert.equal(config[1], GA_MEASUREMENT_ID);
+	assert.equal(config[2].page_location, 'https://cwsweep.hidetaka.dev/guides/scan/?utm_source=newsletter');
+	assert.equal(config[2].page_referrer, 'https://example.com/');
+	assert.equal(appended.length, 1);
+	assert.equal(appended[0].src, `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`);
+});
+
+test('analytics keeps the path of a same-site referrer but not its query', async () => {
+	const { config } = await runAnalytics(
+		'https://cwsweep.hidetaka.dev/guides/clean/',
+		'https://cwsweep.hidetaka.dev/guides/scan/?q=secret',
+	);
+
+	assert.equal(config[2].page_location, 'https://cwsweep.hidetaka.dev/guides/clean/');
+	assert.equal(config[2].page_referrer, 'https://cwsweep.hidetaka.dev/guides/scan/');
+});
+
+test('analytics does nothing outside the production host', async () => {
+	const { config, appended } = await runAnalytics('http://localhost:4321/guides/scan/', '');
+
+	assert.equal(config, undefined);
+	assert.equal(appended.length, 0);
+});
 
 test('Japanese privacy policy discloses the recipient, purpose, and opt-out', async () => {
 	const html = await readPage('ja/privacy/index.html');

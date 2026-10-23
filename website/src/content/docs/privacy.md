@@ -11,8 +11,8 @@ A Japanese version of this page is available at [プライバシーポリシー�
 
 When you open a page, the Google Analytics program sends the following to Google:
 
-- The URL and title of the page you opened, and when you opened it
-- The page you came from (referrer URL)
+- The URL and title of the page you opened, and when you opened it (only query parameters starting with `utm_`, which show where a visit came from, are kept; all others are removed before sending)
+- The page you came from (its path if it is a page on this site, otherwise only the other site's domain)
 - Your device, OS, and browser type, screen size, and language setting
 - An approximate location estimated from your IP address
 - An identifier used to count your visits to this site together (stored in a browser cookie)
