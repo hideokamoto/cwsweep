@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cwsweep.hidetaka.dev/sitemap-index.xml
