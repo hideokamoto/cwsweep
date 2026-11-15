@@ -35,6 +35,26 @@ cargo install --git https://github.com/hideokamoto/cwsweep --locked
 cwsweep scan --regions us-east-1,us-west-2
 ```
 
+## 実行イメージ
+
+以下のスクリーンショットはローカルの偽 AWS 環境で撮影したもので、アカウント ID は架空です。
+
+`scan` は、全アカウント・全リージョンのロググループを、サイズの大きい順に 1 つの表で表示します。
+
+![scan の出力：11 件のロググループについて、アカウント ID、リージョン、ロググループ、保存バイト数、保存期間を並べた表](/screenshots/scan.png)
+
+`clean` は既定でお試し実行（dry-run）です。対象を自分で選ぶと（事前選択はありません）、実行計画を表示し、変更はすべてスキップします。
+
+![dry-run モードの clean：選択したロググループ、予定している削除、各行の「skipped (dry-run: --execute not supplied)」](/screenshots/dry-run.png)
+
+`--execute` を付けると計画を実行します。変更の前に、各アカウントを STS で再確認します。
+
+![--execute 付きの clean：同じ計画が実行され、各ロググループが success と表示される](/screenshots/execute.png)
+
+もう一度 `scan` して結果を確認します。[`retention set`](/ja/guides/retention/) で、全ロググループに同じ保存期間を設定することもできます。
+
+![クリーンアップ後の scan：削除したロググループが表から消えている](/screenshots/after.png)
+
 ## サブコマンド
 
 | サブコマンド | 役割 | AWSへの書き込み |
