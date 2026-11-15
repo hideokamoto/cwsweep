@@ -35,6 +35,26 @@ Start with the read-only `scan` subcommand. `scan` prints log groups as a table 
 cwsweep scan --regions us-east-1,us-west-2
 ```
 
+## What it looks like
+
+The screenshots below were recorded against a local fake AWS environment, so the account IDs are fictional.
+
+`scan` lists every log group across all accounts and regions in one table, largest first.
+
+![scan output: a table of account ID, region, log group, stored bytes and retention for 11 log groups](/screenshots/scan.png)
+
+`clean` runs as a dry-run by default. You pick the targets (nothing is pre-selected), then cwsweep prints the exact plan and skips every change.
+
+![clean in dry-run mode: the selected log groups, the planned delete actions, and "skipped (dry-run: --execute not supplied)" for each](/screenshots/dry-run.png)
+
+Pass `--execute` to apply the plan. Each account is re-verified with STS before anything is changed.
+
+![clean with --execute: the same plan applied, with "success" reported for each log group](/screenshots/execute.png)
+
+Scan again to confirm the result. You can also set one retention period everywhere with [`retention set`](/guides/retention/).
+
+![scan after cleaning: the deleted log groups no longer appear in the table](/screenshots/after.png)
+
 ## Subcommands
 
 | Subcommand | Purpose | Writes to AWS |
