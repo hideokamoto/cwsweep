@@ -3,6 +3,46 @@
 AWS Organization全体のCloudWatch Logsを棚卸しし、対話式に選択したロググループを
 安全に削除・retention変更するRust製CLI。
 
+## Overview (English)
+
+cwsweep is a Rust CLI that inventories CloudWatch Logs across every account and region of an AWS
+Organization, then lets you interactively pick log groups to delete or set a retention period on.
+
+- **Dry-run by default** — nothing changes unless you pass `--execute`.
+- **Nothing is pre-selected** — you choose every target.
+- **Double identity check** — each account is verified with `sts:get-caller-identity` at scan time and again right before execution.
+- **Audit log is always written** — every deletion and retention change is recorded as JSON Lines.
+
+![cwsweep scan: every account and region in one table, largest first](website/public/screenshots/scan.png)
+
+### Install
+
+Download the binary for your platform (Linux / macOS, x86_64 / arm64) from
+[GitHub Releases](https://github.com/hideokamoto/cwsweep/releases), or build from source (Rust 1.94.1+):
+
+```bash
+cargo install --git https://github.com/hideokamoto/cwsweep --locked
+```
+
+### Quick start
+
+Run with the credentials of the AWS Organizations **management account**. cwsweep assumes
+`OrganizationAccountAccessRole` (override with `--role-name`) into each member account. Only the
+commercial partition (`aws`) is supported.
+
+```bash
+cwsweep scan --regions us-east-1,ap-northeast-1   # read-only inventory
+cwsweep clean --regions us-east-1                 # dry-run: pick targets and see the plan
+cwsweep clean --regions us-east-1 --execute       # actually delete / change retention
+```
+
+Documentation (English / 日本語): <https://cwsweep.hidetaka.dev> — the screenshots and demo videos
+there were recorded against a local fake AWS environment, so the account IDs are fictional.
+
+インストールは [GitHub Releases](https://github.com/hideokamoto/cwsweep/releases) のバイナリか
+`cargo install --git https://github.com/hideokamoto/cwsweep --locked`。詳細は
+[日本語ドキュメント](https://cwsweep.hidetaka.dev/ja/) と、以下の「使い方」を参照。
+
 ## 使い方
 
 `cwsweep` は `scan` / `clean` / `audit` / `retention set` のサブコマンドを持つ。サブコマンドを省略した
