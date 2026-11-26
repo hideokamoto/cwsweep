@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use jiff::Timestamp;
 
 use crate::audit::{AuditEntry, AuditEventKind, AuditWrite};
 use crate::credentials::AccountCredentials;
@@ -135,7 +135,7 @@ impl ExecutionEngine {
             // （削除済みなのに記録がどこにも残らない、という状態を作らない）。
             let intent_entry = AuditEntry {
                 run_id: self.run_id.clone(),
-                timestamp: Utc::now().to_rfc3339(),
+                timestamp: Timestamp::now().to_string(),
                 account_id: action.account_id.clone(),
                 region: action.region.clone(),
                 log_group_name: action.log_group_name.clone(),
@@ -167,7 +167,7 @@ impl ExecutionEngine {
             // API呼び出し「後」に結果(result)を監査ログへ記録する。
             let result_entry = AuditEntry {
                 run_id: self.run_id.clone(),
-                timestamp: Utc::now().to_rfc3339(),
+                timestamp: Timestamp::now().to_string(),
                 account_id: action.account_id.clone(),
                 region: action.region.clone(),
                 log_group_name: action.log_group_name.clone(),
